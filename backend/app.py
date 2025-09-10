@@ -2,6 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
 from .api.transactions import blp as transactions_blp
+from .api.balance import blp as balance_blp
 
 def create_app():
     app = Flask(__name__)
@@ -12,6 +13,7 @@ def create_app():
     CORS(app)
     api = Api(app)
     api.register_blueprint(transactions_blp)
+    api.register_blueprint(balance_blp)
 
     @app.get("/health")
     def health():

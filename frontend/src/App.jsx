@@ -1,60 +1,63 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "./api";
+import Filters from "./components/Filters";
+import Summary from "./components/Summary";
+import TransactionsTable from "./components/TransactionsTable";
+import TransactionForm from "./components/TransactionForm";
 
-const API = import.meta.env.VITE_API_URL;
+import { Typography, Stack } from "@mui/material";
+// ...
+<Stack spacing={1} sx={{ mt: 3 }}>
+  <Typography variant="h3" fontWeight={700}>Gastos</Typography>
+  <Typography variant="body2" color="text.secondary">Flask + React + SQLAlchemy</Typography>
+</Stack>
+
+
+function applyFilters(items, f) {
+  return items.filter(t => {
+    if (f.from && t.day < f.from) return false;
+    if (f.to && t.day > f.to) return false;
+    if (f.category && t.category !== f.category) return false;
+    if (f.person && t.person !== f.person) return false;
+    if (f.payment && t.payment !== f.payment) return false;
+    if (f.q && !t.event.toLowerCase().includes(f.q.toLowerCase())) return false;
+    return true;
+  });
+}
 
 export default function App() {
   const [items, setItems] = useState([]);
-  const [form, setForm] = useState({
-    value: "", event: "", day: "",
-    category: "", payment: "", person: ""
-  });
+  const [filters, setFilters] = useState({ from: "", to: "", category: "", person: "", payment: "", q: "" });
+  const [loading, setLoading] = useState(false);
 
   const load = async () => {
-    const { data } = await axios.get(`${API}/transactions`);
-    setItems(data);
+    setLoading(true);
+    const { data } = await api.get("/transactions");
+    // garante string ISO em day
+    const normalized = data.map(t => ({ ...t, day: t.day?.slice(0, 10) }));
+    setItems(normalized);
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const save = async (e) => {
-    e.preventDefault();
-    await axios.post(`${API}/transactions`, {
-      ...form, value: Number(form.value)
-    });
-    setForm({ value: "", event: "", day: "", category: "", payment: "", person: "" });
-    load();
+  const filtered = useMemo(() => applyFilters(items, filters), [items, filters]);
+
+  const create = async (payload) => {
+    await api.post("/transactions", payload);
+    await load();
   };
 
   return (
-    <div style={{maxWidth: 900, margin: "40px auto", fontFamily: "system-ui"}}>
-      <h1>Gastos</h1>
-      <form onSubmit={save} style={{display:"grid", gap:8, gridTemplateColumns:"repeat(6,1fr)"}}>
-        <input placeholder="Valor" value={form.value} onChange={e=>setForm(f=>({...f, value:e.target.value}))}/>
-        <input placeholder="Evento" value={form.event} onChange={e=>setForm(f=>({...f, event:e.target.value}))}/>
-        <input placeholder="Dia (YYYY-MM-DD)" value={form.day} onChange={e=>setForm(f=>({...f, day:e.target.value}))}/>
-        <input placeholder="Categoria" value={form.category} onChange={e=>setForm(f=>({...f, category:e.target.value}))}/>
-        <input placeholder="Pagamento" value={form.payment} onChange={e=>setForm(f=>({...f, payment:e.target.value}))}/>
-        <input placeholder="Pessoa" value={form.person} onChange={e=>setForm(f=>({...f, person:e.target.value}))}/>
-        <button type="submit" style={{gridColumn:"span 6"}}>Adicionar</button>
-      </form>
+    <div style={{ maxWidth: 1000, margin: "36px auto", padding: "0 16px", fontFamily: "Inter, system-ui, sans-serif" }}>
+      <h1 style={{ margin: 0 }}>Gastos</h1>
+      <div style={{ color: "#666", marginTop: 4 }}>Flask + React + SQLAlchemy</div>
 
-      <h2 style={{marginTop:24}}>Transações</h2>
-      <table width="100%" cellPadding="6">
-        <thead><tr><th>Dia</th><th>Evento</th><th>Valor</th><th>Categoria</th><th>Pagamento</th><th>Pessoa</th></tr></thead>
-        <tbody>
-          {items.map(t=>(
-            <tr key={t.id}>
-              <td>{t.day}</td>
-              <td>{t.event}</td>
-              <td>{t.value.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td>
-              <td>{t.category}</td>
-              <td>{t.payment}</td>
-              <td>{t.person}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <TransactionForm onSubmit={create} />
+      <Filters data={items} value={filters} onChange={setFilters} />
+      <Summary items={filtered} />
+
+      {loading ? <div>Carregando...</div> : <TransactionsTable items={filtered} />}
     </div>
   );
 }

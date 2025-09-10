@@ -28,7 +28,7 @@ export default function BalanceCard({refreshKey, owner }) {
 
   return (
     <Grid container spacing={2} sx={{ mt: 1 }}>
-      <Grid item xs={12} md={4}>
+      <Grid item xs={12} md={5}>
         <Card>
           <CardContent>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -46,15 +46,27 @@ export default function BalanceCard({refreshKey, owner }) {
         </Card>
       </Grid>
 
-      <Grid item xs={12} md={4}>
+      <Grid item xs={12} md={8}>
         <Card>
           <CardContent>
             <Typography variant="subtitle2">Faturas por pessoa</Typography>
             <Divider sx={{ my: 1 }} />
             <List dense disablePadding>
               {listEntries(faturas).map(([p, v]) => (
-                <ListItem key={p} secondaryAction={<Chip size="small" label={brl(v)} color={v < 0 ? "error" : "success"} variant="outlined" />}>
-                  <ListItemText primary={p} />
+                <ListItem 
+                    key={p} 
+                    disableGutters
+                    secondaryAction={
+                    <Chip 
+                        size="small" 
+                        label={brl(v)} 
+                        color={v < 0 ? "error" : "success"} 
+                        variant="outlined" 
+                    />
+                    }
+                    sx={{ pr: 1 }}
+                >
+                <ListItemText primary={p} />
                 </ListItem>
               ))}
               {!Object.keys(faturas || {}).length && (
@@ -65,14 +77,14 @@ export default function BalanceCard({refreshKey, owner }) {
         </Card>
       </Grid>
 
-      <Grid item xs={12} md={4}>
+      <Grid item xs={12} md={6}>
         <Card>
           <CardContent>
             <Typography variant="subtitle2">Me devem (débito) por pessoa</Typography>
             <Divider sx={{ my: 1 }} />
             <List dense disablePadding>
               {listEntries(me_devem).map(([p, v]) => (
-                <ListItem key={p} secondaryAction={<Chip size="small" label={brl(v)} color={v < 0 ? "error" : "success"} variant="outlined" />}>
+                <ListItem key={p} disableGutters secondaryAction={<Chip size="small" label={brl(v)} color={v < 0 ? "error" : "success"} variant="outlined" />}>
                   <ListItemText primary={p} />
                 </ListItem>
               ))}

@@ -1,5 +1,5 @@
 import { unique } from "../utils";
-import { Grid, TextField, MenuItem, Card, CardContent } from "@mui/material";
+import { Grid, TextField, MenuItem, Card, CardContent, Typography, Stack } from "@mui/material";
 
 export default function Filters({ data = [], value, onChange }) {
   const categories = unique(data.map(d => d.category));
@@ -8,6 +8,8 @@ export default function Filters({ data = [], value, onChange }) {
   const patch = (k, v) => onChange({ ...value, [k]: v });
 
   return (
+    <Stack spacing={1} sx={{ mt: 3 }}>
+      <Typography variant="h4" fontWeight={700}>Filtrar</Typography>
     <Card sx={{ mt: 2 }}>
       <CardContent>
         <Grid container spacing={1}>
@@ -47,5 +49,6 @@ export default function Filters({ data = [], value, onChange }) {
         </Grid>
       </CardContent>
     </Card>
+  </Stack>
   );
 }

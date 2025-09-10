@@ -4,6 +4,7 @@ from datetime import date
 from ..db import SessionLocal
 from ..models import Transaction, Category, PaymentMethod, Person, TxType
 from typing import Optional
+from ..settings import OWNER
 
 blp = Blueprint("transactions", __name__, description="Transações")
 
@@ -72,7 +73,9 @@ def create_transaction():
 
     cat = get_or_create(Category, _norm(data.get("category")))
     pay = get_or_create(PaymentMethod, _norm_payment(data.get("payment")))
-    per = get_or_create(Person, _norm(data.get("person")))
+
+    person_name = _norm(data.get("person")) or OWNER
+    per = get_or_create(Person, person_name)
 
     t = Transaction(
         value=value,
@@ -85,3 +88,16 @@ def create_transaction():
     out = {"id": t.id}
     s.close()
     return out, 201
+
+@blp.route("/transactions/options", methods=["GET"])
+def list_options():
+    s = SessionLocal()
+    cats = [c.name for c in s.query(Category).order_by(Category.name).all()]
+    pays = [p.name for p in s.query(PaymentMethod).order_by(PaymentMethod.name).all()]
+    people = [p.name for p in s.query(Person).order_by(Person.name).all()]
+    s.close()
+    return {
+        "categories": cats,
+        "payment_methods": pays,
+        "people": people,
+    }

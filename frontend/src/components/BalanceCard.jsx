@@ -5,7 +5,7 @@ import {
 } from "@mui/material";
 import { brl } from "../utils";
 
-export default function BalanceCard({refreshKey}) {
+export default function BalanceCard({refreshKey, owner }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,7 +31,10 @@ export default function BalanceCard({refreshKey}) {
       <Grid item xs={12} md={4}>
         <Card>
           <CardContent>
-            <Typography variant="subtitle2">Saldo total</Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="subtitle2">Saldo total</Typography>
+              <Chip size="small" label={`User: ${owner}`} />
+            </Stack>
             <Typography variant="h4" color={saldo_total < 0 ? "error.main" : "success.main"} sx={{ fontWeight: 700 }}>
               {brl(saldo_total)}
             </Typography>

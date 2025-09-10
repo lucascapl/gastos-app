@@ -2,10 +2,10 @@ from flask_smorest import Blueprint
 from ..db import SessionLocal
 from ..models import Transaction, TxType
 from sqlalchemy.orm import joinedload
+from ..settings import OWNER
 
 blp = Blueprint("balance", __name__, description="Balanço e faturas")
 
-LUCAS = "Lucas"
 CREDITO = "credito"
 DEBITO = "debito"
 
@@ -26,7 +26,7 @@ def get_balance():
         val = float(t.value)
         person = (t.person.name if t.person else None) or "—"
         pay = _norm(t.payment_method.name if t.payment_method else "")
-        is_lucas = _norm(person) == _norm(LUCAS)
+        is_owner = _norm(person) == _norm(OWNER)
 
         # reembolsos
         if t.tx_type == TxType.reembolso_credito:
@@ -40,7 +40,7 @@ def get_balance():
             continue
 
         # transações normais
-        if is_lucas:
+        if is_owner:
             saldo_total += val
         else:
             if pay == CREDITO:
@@ -67,8 +67,13 @@ def get_balance():
 
     s.close()
     return {
+        "owner": OWNER,
         "saldo_total": round(saldo_total, 2),
         "totais": totais,
         "faturas": faturas,
         "me_devem": me_devem,
     }
+
+@blp.route("/whoami", methods=["GET"])
+def whoami():
+    return {"owner": OWNER}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "./api";
+import { api, getOwner } from "./api";
 import Filters from "./components/Filters";
 import Summary from "./components/Summary";
 import TransactionsTable from "./components/TransactionsTable";
@@ -29,6 +29,12 @@ export default function App() {
   });
   const [loading, setLoading] = useState(false);
   const [balanceRefresh, setBalanceRefresh] = useState(0);
+  const [owner, setOwner] = useState("...");
+  const [optionsVersion, setOptionsVersion] = useState(0);
+
+  useEffect(() => {
+    (async () => setOwner(await getOwner()))();
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -49,6 +55,7 @@ export default function App() {
     await api.post("/transactions", payload);
     await load();
     setBalanceRefresh((x) => x + 1); // força BalanceCard a recarregar /balance
+    setOptionsVersion((x) => x + 1);
   };
 
   return (
@@ -60,8 +67,8 @@ export default function App() {
         </Typography>
       </Stack>
 
-      <TransactionForm onSubmit={create} />
-      <BalanceCard refreshKey={balanceRefresh} />
+      <TransactionForm onSubmit={create} owner={owner} optionsVersion={optionsVersion} />
+      <BalanceCard refreshKey={balanceRefresh} owner={owner} />
       <Filters data={items} value={filters} onChange={setFilters} />
       <Summary items={filtered} />
 

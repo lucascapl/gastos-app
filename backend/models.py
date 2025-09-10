@@ -1,6 +1,12 @@
-from .db import Base
-from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum
 from sqlalchemy.orm import relationship
+import enum
+from .db import Base
+
+class TxType(enum.Enum):
+    normal = "normal"
+    reembolso_credito = "reembolso_credito"
+    reembolso_debito = "reembolso_debito"
 
 class Category(Base):
     __tablename__ = "categories"
@@ -31,3 +37,5 @@ class Transaction(Base):
     payment_method = relationship("PaymentMethod")
     category = relationship("Category")
     person = relationship("Person")
+
+    tx_type = Column(Enum(TxType), nullable=False, default=TxType.normal)

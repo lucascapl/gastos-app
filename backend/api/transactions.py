@@ -89,6 +89,58 @@ def create_transaction():
     s.close()
     return out, 201
 
+@blp.route("/transactions/<int:tx_id>", methods=["PUT", "PATCH"])
+def update_transaction(tx_id):
+    from ..models import Transaction, Category, PaymentMethod, Person
+    from flask import request
+    from datetime import date
+
+    data = request.get_json() or {}
+    s = SessionLocal()
+    t = s.query(Transaction).get(tx_id)
+    if not t:
+        abort(404, message="Transação não encontrada.")
+
+    def get_or_create(model, name):
+        if not name:
+            return None
+        obj = s.query(model).filter_by(name=name).first()
+        if not obj:
+            obj = model(name=name)
+            s.add(obj); s.flush()
+        return obj
+
+    # campos simples
+    if "value" in data:
+        t.value = float(data["value"])
+    if "event" in data:
+        t.event = _norm(data["event"])
+    if "day" in data:
+        t.day = date.fromisoformat(data["day"])
+
+    # relacionamentos por nome
+    if "category" in data:
+        t.category = get_or_create(Category, _norm(data["category"]))
+    if "payment" in data:
+        t.payment_method = get_or_create(PaymentMethod, _norm_payment(data["payment"]))
+    if "person" in data:
+        person_name = _norm(data["person"]) or OWNER
+        t.person = get_or_create(Person, person_name)
+
+    s.commit()
+    out = {
+        "id": t.id,
+        "value": float(t.value),
+        "event": t.event,
+        "day": t.day.isoformat(),
+        "category": t.category.name if t.category else None,
+        "payment": t.payment_method.name if t.payment_method else None,
+        "person": t.person.name if t.person else None,
+    }
+    s.close()
+    return out, 200
+
+
 @blp.route("/transactions/options", methods=["GET"])
 def list_options():
     s = SessionLocal()

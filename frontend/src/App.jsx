@@ -75,7 +75,17 @@ export default function App() {
       {loading ? (
         <div>Carregando...</div>
       ) : (
-        <TransactionsTable items={filtered} />
+        <TransactionsTable
+          items={filtered}
+          optionsVersion={optionsVersion}
+          onSaved={() => {
+            // recarrega lista e atualiza cartões de saldo/faturas
+            (async () => {
+              await load();
+              setBalanceRefresh((x) => x + 1);
+            })();
+          }}
+        />
       )}
     </div>
   );

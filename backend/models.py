@@ -17,7 +17,6 @@ class PaymentMethod(Base):
     __tablename__ = "payment_methods"
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
-
 class Person(Base):
     __tablename__ = "people"
     id = Column(Integer, primary_key=True)

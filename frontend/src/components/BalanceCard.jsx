@@ -64,9 +64,9 @@ export default function BalanceCard({refreshKey, owner }) {
                         variant="outlined" 
                     />
                     }
-                    sx={{ pr: 1 }}
+                    sx={{ pr: 15 }}
                 >
-                <ListItemText primary={p} />
+                <ListItemText primary={p} sx={{ overflow: "hidden", textOverflow: "ellipsis" }}/>
                 </ListItem>
               ))}
               {!Object.keys(faturas || {}).length && (

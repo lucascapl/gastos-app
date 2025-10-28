@@ -1,5 +1,5 @@
 import { brl } from "../utils";
-import { Grid, Card, CardContent, Typography, Divider } from "@mui/material";
+import { Grid, Card, CardContent, Typography, Divider, Box } from "@mui/material";
 
 export default function Summary({ items = [] }) {
   const total = items.reduce((acc, t) => acc + Number(t.value || 0), 0);
@@ -60,9 +60,42 @@ export default function Summary({ items = [] }) {
 
 function Row({ left, right }) {
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", padding: "6px 0" }}>
-      <span>{left}</span>
-      <span>{right}</span>
-    </div>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        py: 0.75,
+        gap: 2,
+        // responsivo: coluna em telas muito pequenas, linha em sm+
+        flexDirection: { xs: "column", sm: "row" },
+      }}
+    >
+      <Typography
+        component="span"
+        sx={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {left}
+      </Typography>
+
+      <Typography
+        component="span"
+        sx={{
+          flex: "0 0 auto",
+          whiteSpace: "nowrap",
+          // quando empilhado, alinha o valor à direita
+          alignSelf: { xs: "flex-end", sm: "auto" },
+          ml: { xs: 0, sm: 3 },
+        }}
+      >
+        {right}
+      </Typography>
+    </Box>
   );
 }

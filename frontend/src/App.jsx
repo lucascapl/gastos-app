@@ -4,6 +4,7 @@ import Filters from "./components/Filters";
 import Summary from "./components/Summary";
 import TransactionsTable from "./components/TransactionsTable";
 import TransactionForm from "./components/TransactionForm";
+import BillingCycleBar from "./components/BillingCycleBar";
 import BalanceCard from "./components/BalanceCard";
 import { Typography, Stack } from "@mui/material";
 
@@ -66,7 +67,16 @@ export default function App() {
           Flask + React + SQLAlchemy
         </Typography>
       </Stack>
-
+      <BillingCycleBar
+        onChange={(f) => {
+          setFilters((prev) => ({
+            ...prev,
+            from: f.from,
+            to: f.to,
+            payment: f.payment
+          }));
+        }}
+      />
       <TransactionForm onSubmit={create} owner={owner} optionsVersion={optionsVersion} />
       <BalanceCard refreshKey={balanceRefresh} owner={owner} />
       <Filters data={items} value={filters} onChange={setFilters} />

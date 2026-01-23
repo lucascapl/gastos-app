@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 import enum
+
 from .db import Base
+from .extensions import bcrypt
 
 class TxType(enum.Enum):
     normal = "normal"
@@ -38,3 +40,16 @@ class Transaction(Base):
     person = relationship("Person")
 
     tx_type = Column(Enum(TxType), nullable=False, default=TxType.normal)
+
+class User(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    def check_password(self, password: str) -> bool:
+        return bcrypt.check_password_hash(self.password_hash, password)

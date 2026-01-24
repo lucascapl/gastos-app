@@ -1,21 +1,13 @@
-from flask_jwt_extended import get_jwt
-from .extensions import jwt
+from flask_jwt_extended import JWTManager
 from .db import SessionLocal
 from .models import User
 
-
-@jwt.user_lookup_loader
-def user_lookup_callback(_jwt_header, jwt_data):
-    user_id = int(jwt_data["sub"])  # sub vem como string
-    db = SessionLocal()
-    try:
-        return db.get(User, user_id)
-    finally:
-        db.close()
-
-
-
-@jwt.additional_claims_loader
-def add_claims_to_access_token(identity):
-    # opcional: informações extras no token
-    return {"user_id": identity}
+def register_jwt_callbacks(jwt: JWTManager):
+    @jwt.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        username = jwt_data["sub"]  # identity=username
+        s = SessionLocal()
+        try:
+            return s.query(User).filter_by(username=username).first()
+        finally:
+            s.close()

@@ -37,7 +37,7 @@ def register():
         db.refresh(user)
 
         # já retorna token pra facilitar o fluxo do front
-        token = create_access_token(identity=str(user.id))
+        token = create_access_token(identity=user.username)
         return jsonify({"id": user.id, "username": user.username, "access_token": token}), 201
     finally:
         db.close()
@@ -54,7 +54,7 @@ def login():
         if not user or not user.check_password(password):
             return jsonify({"message": "Wrong username or password"}), 401
 
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=(user.username))
         return jsonify({"access_token": access_token, "user": {"id": user.id, "username": user.username}}), 200
     finally:
         db.close()
@@ -62,10 +62,10 @@ def login():
 @blp.route("/me", methods=["GET"])
 @jwt_required()
 def me():
-    user_id = get_jwt_identity()
+    username = get_jwt_identity()
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == user_id).one_or_none()
+        user = db.query(User).filter(User.username == username).one_or_none()
         if not user:
             return jsonify({"message": "Usuário não encontrado"}), 404
         return jsonify({"id": user.id, "username": user.username}), 200

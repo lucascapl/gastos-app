@@ -10,6 +10,8 @@ import os
 
 from .extensions import jwt, bcrypt
 from .db import Base, engine
+from .jwt_callbacks import register_jwt_callbacks
+
 
 def create_app():
     app = Flask(__name__)
@@ -20,11 +22,18 @@ def create_app():
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "@super-secretKEY123")
     
 
-    CORS(app)
+    CORS(
+        app,
+        resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+        supports_credentials=False,
+        allow_headers=["Content-Type", "Authorization"],
+        expose_headers=["Authorization"],
+    )
 
     # extensions
     jwt.init_app(app)
     bcrypt.init_app(app)
+    register_jwt_callbacks(jwt)
 
     Base.metadata.create_all(bind=engine)
 

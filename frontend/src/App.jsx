@@ -6,7 +6,11 @@ import TransactionsTable from "./components/TransactionsTable";
 import TransactionForm from "./components/TransactionForm";
 import BillingCycleBar from "./components/BillingCycleBar";
 import BalanceCard from "./components/BalanceCard";
-import { Typography, Stack } from "@mui/material";
+import { Typography, Stack, Button } from "@mui/material";
+
+import Login from "./pages/Login";
+import Register from "./pages/Register"; // se não criar, remova esse import e o fluxo de register
+import { clearToken, isLoggedIn } from "./auth";
 
 function applyFilters(items, f) {
   return items.filter((t) => {
@@ -30,12 +34,10 @@ export default function App() {
   });
   const [loading, setLoading] = useState(false);
   const [balanceRefresh, setBalanceRefresh] = useState(0);
-  const [owner, setOwner] = useState("...");
+  const [owner, setOwner] = useState(null);
   const [optionsVersion, setOptionsVersion] = useState(0);
-
-  useEffect(() => {
-    (async () => setOwner(await getOwner()))();
-  }, []);
+  const [ready, setReady] = useState(false);
+  const [screen, setScreen] = useState("login"); // "login" | "register" | "app"
 
   const load = async () => {
     setLoading(true);
@@ -48,25 +50,86 @@ export default function App() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const boot = async () => {
+    setReady(false);
+
+    if (!isLoggedIn()) {
+      setOwner(null);
+      setItems([]);
+      setScreen("login");
+      setReady(true);
+      return;
+    }
+
+    const o = await getOwner(); // /whoami (com token)
+    if (!o) {
+      // token inválido/expirado -> interceptor limpou
+      setOwner(null);
+      setItems([]);
+      setScreen("login");
+      setReady(true);
+      return;
+    }
+
+    setOwner(o);
+    setScreen("app");
+    await load();
+    setReady(true);
+  };
+
+  useEffect(() => { boot(); }, []);
 
   const filtered = useMemo(() => applyFilters(items, filters), [items, filters]);
 
   const create = async (payload) => {
     await api.post("/transactions", payload);
     await load();
-    setBalanceRefresh((x) => x + 1); // força BalanceCard a recarregar /balance
+    setBalanceRefresh((x) => x + 1);
     setOptionsVersion((x) => x + 1);
   };
+
+  const logout = () => {
+    clearToken();
+    setOwner(null);
+    setItems([]);
+    setScreen("login");
+  };
+
+  if (!ready) return null;
+
+  if (screen === "login") {
+    return (
+      <Login
+        onLoggedIn={boot}
+        onGoRegister={() => setScreen("register")}
+      />
+    );
+  }
+
+  if (screen === "register") {
+    return (
+      <Register
+        onLoggedIn={boot}
+        onGoLogin={() => setScreen("login")}
+      />
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1000, margin: "36px auto", padding: "0 16px" }}>
       <Stack spacing={1} sx={{ mt: 3 }}>
-        <Typography variant="h3" fontWeight={700}>Gastos</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Flask + React + SQLAlchemy
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <div>
+            <Typography variant="h3" fontWeight={700}>Gastos</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Flask + React + SQLAlchemy — logado como <b>{owner}</b>
+            </Typography>
+          </div>
+
+          <Button variant="outlined" onClick={logout}>Sair</Button>
+        </Stack>
       </Stack>
+
       <BillingCycleBar
         onChange={(f) => {
           setFilters((prev) => ({
@@ -77,6 +140,7 @@ export default function App() {
           }));
         }}
       />
+
       <TransactionForm onSubmit={create} owner={owner} optionsVersion={optionsVersion} />
       <BalanceCard refreshKey={balanceRefresh} owner={owner} />
       <Filters data={items} value={filters} onChange={setFilters} />
@@ -89,7 +153,6 @@ export default function App() {
           items={filtered}
           optionsVersion={optionsVersion}
           onSaved={() => {
-            // recarrega lista e atualiza cartões de saldo/faturas
             (async () => {
               await load();
               setBalanceRefresh((x) => x + 1);

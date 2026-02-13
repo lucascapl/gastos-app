@@ -120,9 +120,9 @@ export default function App() {
       <Stack spacing={1} sx={{ mt: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <div>
-            <Typography variant="h3" fontWeight={700}>Gastos</Typography>
+            <Typography variant="h3" fontWeight={700}>Balance.io</Typography>
             <Typography variant="body2" color="text.secondary">
-              Flask + React + SQLAlchemy — logado como <b>{owner}</b>
+              Bem vindo, <b>{owner}!</b>
             </Typography>
           </div>
 

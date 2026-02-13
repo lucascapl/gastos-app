@@ -6,6 +6,7 @@ import TransactionsTable from "./components/TransactionsTable";
 import TransactionForm from "./components/TransactionForm";
 import BillingCycleBar from "./components/BillingCycleBar";
 import BalanceCard from "./components/BalanceCard";
+import WelcomeModal from "./components/WelcomeModal";
 import { Typography, Stack, Button } from "@mui/material";
 
 import Login from "./pages/Login";
@@ -117,6 +118,7 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "36px auto", padding: "0 16px" }}>
+      <WelcomeModal/>
       <Stack spacing={1} sx={{ mt: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <div>

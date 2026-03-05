@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
+from datetime import timedelta
 
 from .api.transactions import blp as transactions_blp
 from .api.balance import blp as balance_blp
@@ -20,6 +21,7 @@ def create_app():
     app.config["OPENAPI_VERSION"] = "3.0.3"
     app.config["OPENAPI_URL_PREFIX"] = "/docs"
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "@super-secretKEY123")
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=7)
     
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
     

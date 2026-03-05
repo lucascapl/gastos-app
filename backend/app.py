@@ -21,10 +21,12 @@ def create_app():
     app.config["OPENAPI_URL_PREFIX"] = "/docs"
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "@super-secretKEY123")
     
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    
 
     CORS(
         app,
-        resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+        resources={r"/*": {"origins": [frontend_url, "http://127.0.0.1:5173"]}},
         supports_credentials=False,
         allow_headers=["Content-Type", "Authorization"],
         expose_headers=["Authorization"],

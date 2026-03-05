@@ -6,6 +6,7 @@ import TransactionsTable from "./components/TransactionsTable";
 import TransactionForm from "./components/TransactionForm";
 import BillingCycleBar from "./components/BillingCycleBar";
 import BalanceCard from "./components/BalanceCard";
+import WelcomeModal from "./components/WelcomeModal";
 import { Typography, Stack, Button } from "@mui/material";
 
 import Login from "./pages/Login";
@@ -117,12 +118,13 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "36px auto", padding: "0 16px" }}>
+      <WelcomeModal/>
       <Stack spacing={1} sx={{ mt: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <div>
-            <Typography variant="h3" fontWeight={700}>Gastos</Typography>
+            <Typography variant="h3" fontWeight={700}>Balance.io</Typography>
             <Typography variant="body2" color="text.secondary">
-              Flask + React + SQLAlchemy — logado como <b>{owner}</b>
+              Bem vindo, <b>{owner}!</b>
             </Typography>
           </div>
 

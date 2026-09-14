@@ -25,15 +25,21 @@ def create_app():
     
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
     
-
+    cors_origins = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173"
+        ).split(",")
+        if origin.strip()
+    ]
     CORS(
         app,
-        resources={r"/*": {"origins": [frontend_url, "http://127.0.0.1:5173"]}},
+        resources={r"/*": {"origins": cors_origins}},
         supports_credentials=False,
         allow_headers=["Content-Type", "Authorization"],
         expose_headers=["Authorization"],
     )
-
     # extensions
     jwt.init_app(app)
     bcrypt.init_app(app)

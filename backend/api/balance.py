@@ -20,6 +20,7 @@ def get_balance():
         txs = (
             s.query(Transaction)
             .filter(Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(False))
             .options(joinedload(Transaction.payment_method), joinedload(Transaction.person))
             .all()
         )

@@ -5,17 +5,17 @@ import { api } from "../api";
 export default function TransactionForm({ onSubmit, owner, optionsVersion }) {
   const [form, setForm] = useState({
     value: "", event: "", day: "",
-    category: "", payment: "", person: ""
+    category: "", bank: "", payment: "", person: ""
   });
 
-  const [opts, setOpts] = useState({ categories: [], payment_methods: [], people: [] });
+  const [opts, setOpts] = useState({ categories: [], banks: [], payment_methods: [], people: [] });
 
   useEffect(() => {
     const load = async () => {
       try {
         const { data } = await api.get("/transactions/options");
         setOpts(data);
-      } catch (e) {
+      } catch {
         // silencioso; o form ainda funciona com texto livre
       }
     };
@@ -27,7 +27,7 @@ export default function TransactionForm({ onSubmit, owner, optionsVersion }) {
   const submit = async (e) => {
     e.preventDefault();
     await onSubmit({ ...form, value: Number(form.value) });
-    setForm({ value: "", event: "", day: "", category: "", payment: "", person: "" });
+    setForm({ value: "", event: "", day: "", category: "", bank: "", payment: "", person: "" });
   };
 
   return (
@@ -96,6 +96,22 @@ export default function TransactionForm({ onSubmit, owner, optionsVersion }) {
               onInputChange={(_, newInput) => patch("category", newInput)}
               renderInput={(params) => (
                 <TextField {...params} size="small" label="Categoria" fullWidth />
+              )}
+            />
+          </Box>
+
+          {/* Banco */}
+          <Box sx={{ minWidth: 0 }}>
+            <Autocomplete
+              fullWidth
+              freeSolo
+              options={opts.banks || []}
+              value={form.bank || null}
+              onChange={(_, newValue) => patch("bank", newValue || "")}
+              inputValue={form.bank}
+              onInputChange={(_, newInput) => patch("bank", newInput)}
+              renderInput={(params) => (
+                <TextField {...params} size="small" label="Banco" fullWidth />
               )}
             />
           </Box>

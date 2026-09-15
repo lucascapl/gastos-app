@@ -3,6 +3,7 @@ import { Box, TextField, MenuItem, Card, CardContent, Typography, Stack } from "
 
 export default function Filters({ data = [], value, onChange }) {
   const categories = unique(data.map(d => d.category));
+  const banks = unique(data.map(d => d.bank));
   const people = unique(data.map(d => d.person));
   const payments = unique(data.map(d => d.payment));
   const patch = (k, v) => onChange({ ...value, [k]: v });
@@ -36,6 +37,13 @@ export default function Filters({ data = [], value, onChange }) {
               onChange={e=>patch("category", e.target.value)} fullWidth>
               <MenuItem value="">Todas</MenuItem>
               {categories.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </TextField>
+          </Box>
+          <Box item xs={12} sm={2.4}>
+            <TextField size="small" select label="Banco" value={value.bank || ""}
+              onChange={e=>patch("bank", e.target.value)} fullWidth>
+              <MenuItem value="">Todos</MenuItem>
+              {banks.map(b => <MenuItem key={b} value={b}>{b}</MenuItem>)}
             </TextField>
           </Box>
           <Box item xs={12} sm={2.4}>

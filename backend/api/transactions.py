@@ -1,7 +1,7 @@
 from flask_smorest import Blueprint, abort
 from flask import request
 from flask_jwt_extended import jwt_required, current_user
-from datetime import date
+from datetime import date, datetime
 from ..db import SessionLocal
 from ..models import Transaction, Category, PaymentMethod, Person, TxType
 from typing import Optional
@@ -10,6 +10,19 @@ blp = Blueprint("transactions", __name__, description="Transações")
 
 def _norm(s):
     return (s or "").strip()
+
+def _serialize_transaction(t: Transaction):
+    return {
+        "id": t.id,
+        "value": float(t.value),
+        "event": t.event,
+        "day": t.day.isoformat(),
+        "bank": t.bank,
+        "category": t.category.name if t.category else None,
+        "payment": t.payment_method.name if t.payment_method else None,
+        "person": t.person.name if t.person else None,
+        "tx_type": t.tx_type.value if t.tx_type else "normal",
+    }
 
 def _norm_payment(name: Optional[str]):
     if not name:
@@ -44,18 +57,10 @@ def list_transactions():
         q = (
             s.query(Transaction)
             .filter(Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(False))
             .order_by(Transaction.day.desc(), Transaction.id.desc())
         )
-        return [{
-            "id": t.id,
-            "value": float(t.value),
-            "event": t.event,
-            "day": t.day.isoformat(),
-            "category": t.category.name if t.category else None,
-            "payment": t.payment_method.name if t.payment_method else None,
-            "person": t.person.name if t.person else None,
-            "tx_type": t.tx_type.value if t.tx_type else "normal",
-        } for t in q.all()]
+        return [_serialize_transaction(t) for t in q.all()]
     finally:
         s.close()
 
@@ -106,6 +111,7 @@ def create_transaction():
             value=value,
             event=_norm(data["event"]),
             day=date.fromisoformat(data["day"]),
+            bank=_norm(data.get("bank")) or None,
             category=cat,
             payment_method=pay,
             person=per,
@@ -126,6 +132,7 @@ def update_transaction(tx_id):
         t = (
             s.query(Transaction)
             .filter(Transaction.id == tx_id, Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(False))
             .first()
         )
         if not t:
@@ -138,6 +145,8 @@ def update_transaction(tx_id):
             t.event = _norm(data["event"])
         if "day" in data:
             t.day = date.fromisoformat(data["day"])
+        if "bank" in data:
+            t.bank = _norm(data["bank"]) or None
         if "tx_type" in data:
             try:
                 t.tx_type = TxType(data["tx_type"])
@@ -155,16 +164,28 @@ def update_transaction(tx_id):
 
         s.commit()
 
-        return {
-            "id": t.id,
-            "value": float(t.value),
-            "event": t.event,
-            "day": t.day.isoformat(),
-            "category": t.category.name if t.category else None,
-            "payment": t.payment_method.name if t.payment_method else None,
-            "person": t.person.name if t.person else None,
-            "tx_type": t.tx_type.value if t.tx_type else "normal",
-        }, 200
+        return _serialize_transaction(t), 200
+    finally:
+        s.close()
+
+@blp.route("/transactions/<int:tx_id>", methods=["DELETE"])
+@jwt_required()
+def delete_transaction(tx_id):
+    s = SessionLocal()
+    try:
+        t = (
+            s.query(Transaction)
+            .filter(Transaction.id == tx_id, Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(False))
+            .first()
+        )
+        if not t:
+            abort(404, message="TransaÃ§Ã£o nÃ£o encontrada.")
+
+        t.is_deleted = True
+        t.deleted_at = datetime.utcnow()
+        s.commit()
+        return {"id": t.id, "deleted": True}, 200
     finally:
         s.close()
 
@@ -176,10 +197,24 @@ def list_options():
         cats = [c.name for c in s.query(Category).filter_by(user_id=current_user.id).order_by(Category.name).all()]
         pays = [p.name for p in s.query(PaymentMethod).filter_by(user_id=current_user.id).order_by(PaymentMethod.name).all()]
         people = [p.name for p in s.query(Person).filter_by(user_id=current_user.id).order_by(Person.name).all()]
+        banks = [
+            row[0]
+            for row in (
+                s.query(Transaction.bank)
+                .filter(Transaction.user_id == current_user.id)
+                .filter(Transaction.is_deleted.is_(False))
+                .filter(Transaction.bank.isnot(None))
+                .distinct()
+                .order_by(Transaction.bank)
+                .all()
+            )
+            if row[0]
+        ]
         return {
             "categories": cats,
             "payment_methods": pays,
             "people": people,
+            "banks": banks,
         }
     finally:
         s.close()

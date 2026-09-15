@@ -1,12 +1,35 @@
 import { useEffect, useState } from "react";
-import { Grid, TextField, Button, Card, CardContent, Autocomplete, Box } from "@mui/material";
+import { TextField, Button, Card, CardContent, Autocomplete, Box } from "@mui/material";
 import { api } from "../api";
 
+const AUTOFILL_KEY = "transaction-autofill";
+
+const emptyForm = {
+  value: "",
+  event: "",
+  day: "",
+  category: "",
+  bank: "",
+  payment: "",
+  person: "",
+};
+
+function getInitialForm() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUTOFILL_KEY) || "{}");
+    return {
+      ...emptyForm,
+      day: saved.day || "",
+      payment: saved.payment || "",
+      person: saved.person || "",
+    };
+  } catch {
+    return emptyForm;
+  }
+}
+
 export default function TransactionForm({ onSubmit, owner, optionsVersion }) {
-  const [form, setForm] = useState({
-    value: "", event: "", day: "",
-    category: "", bank: "", payment: "", person: ""
-  });
+  const [form, setForm] = useState(getInitialForm);
 
   const [opts, setOpts] = useState({ categories: [], banks: [], payment_methods: [], people: [] });
 
@@ -27,7 +50,16 @@ export default function TransactionForm({ onSubmit, owner, optionsVersion }) {
   const submit = async (e) => {
     e.preventDefault();
     await onSubmit({ ...form, value: Number(form.value) });
-    setForm({ value: "", event: "", day: "", category: "", bank: "", payment: "", person: "" });
+    const autofill = {
+      day: form.day,
+      payment: form.payment,
+      person: form.person,
+    };
+    localStorage.setItem(AUTOFILL_KEY, JSON.stringify(autofill));
+    setForm({
+      ...emptyForm,
+      ...autofill,
+    });
   };
 
   return (

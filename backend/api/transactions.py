@@ -6,6 +6,12 @@ from ..db import SessionLocal
 from ..models import Transaction, Category, PaymentMethod, Person, TxType
 from typing import Optional
 
+REFERENCE_MODELS = {
+    "categories": (Category, Transaction.category_id),
+    "payment_methods": (PaymentMethod, Transaction.payment_method_id),
+    "people": (Person, Transaction.person_id),
+}
+
 blp = Blueprint("transactions", __name__, description="Transações")
 
 def _norm(s):
@@ -48,6 +54,27 @@ def _get_or_create_user_scoped(s, model, name: Optional[str]):
         s.add(obj)
         s.flush()
     return obj
+
+def _reference_model(kind: str):
+    if kind not in REFERENCE_MODELS:
+        abort(404, message="Tipo de cadastro nao encontrado.")
+    return REFERENCE_MODELS[kind]
+
+def _normalize_reference_name(kind: str, name: Optional[str]):
+    normalized = _norm_payment(name) if kind == "payment_methods" else _norm(name)
+    if not normalized:
+        abort(400, message="Nome e obrigatorio.")
+    return normalized
+
+def _serialize_reference_item(s, model, fk_column, item):
+    usage_count = (
+        s.query(Transaction)
+        .filter(Transaction.user_id == current_user.id)
+        .filter(Transaction.is_deleted.is_(False))
+        .filter(fk_column == item.id)
+        .count()
+    )
+    return {"id": item.id, "name": item.name, "usage_count": usage_count}
 
 @blp.route("/transactions", methods=["GET"])
 @jwt_required()
@@ -216,5 +243,120 @@ def list_options():
             "people": people,
             "banks": banks,
         }
+    finally:
+        s.close()
+
+@blp.route("/transactions/reference-data", methods=["GET"])
+@jwt_required()
+def list_reference_data():
+    s = SessionLocal()
+    try:
+        result = {}
+        for kind, (model, fk_column) in REFERENCE_MODELS.items():
+            items = (
+                s.query(model)
+                .filter(model.user_id == current_user.id)
+                .order_by(model.name)
+                .all()
+            )
+            result[kind] = [
+                _serialize_reference_item(s, model, fk_column, item)
+                for item in items
+            ]
+        return result
+    finally:
+        s.close()
+
+@blp.route("/transactions/reference-data/<string:kind>", methods=["POST"])
+@jwt_required()
+def create_reference_item(kind):
+    data = request.get_json() or {}
+    model, fk_column = _reference_model(kind)
+    name = _normalize_reference_name(kind, data.get("name"))
+
+    s = SessionLocal()
+    try:
+        existing = (
+            s.query(model)
+            .filter(model.user_id == current_user.id, model.name == name)
+            .first()
+        )
+        if existing:
+            abort(409, message="Ja existe um cadastro com esse nome.")
+
+        item = model(user_id=current_user.id, name=name)
+        s.add(item)
+        s.commit()
+        s.refresh(item)
+        return _serialize_reference_item(s, model, fk_column, item), 201
+    finally:
+        s.close()
+
+@blp.route("/transactions/reference-data/<string:kind>/<int:item_id>", methods=["PATCH"])
+@jwt_required()
+def update_reference_item(kind, item_id):
+    data = request.get_json() or {}
+    model, fk_column = _reference_model(kind)
+    name = _normalize_reference_name(kind, data.get("name"))
+
+    s = SessionLocal()
+    try:
+        item = (
+            s.query(model)
+            .filter(model.id == item_id, model.user_id == current_user.id)
+            .first()
+        )
+        if not item:
+            abort(404, message="Cadastro nao encontrado.")
+
+        duplicate = (
+            s.query(model)
+            .filter(model.user_id == current_user.id, model.name == name, model.id != item_id)
+            .first()
+        )
+        if duplicate:
+            abort(409, message="Ja existe um cadastro com esse nome.")
+
+        item.name = name
+        s.commit()
+        return _serialize_reference_item(s, model, fk_column, item), 200
+    finally:
+        s.close()
+
+@blp.route("/transactions/reference-data/<string:kind>/<int:item_id>", methods=["DELETE"])
+@jwt_required()
+def delete_reference_item(kind, item_id):
+    model, fk_column = _reference_model(kind)
+
+    s = SessionLocal()
+    try:
+        item = (
+            s.query(model)
+            .filter(model.id == item_id, model.user_id == current_user.id)
+            .first()
+        )
+        if not item:
+            abort(404, message="Cadastro nao encontrado.")
+
+        usage_count = (
+            s.query(Transaction)
+            .filter(Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(False))
+            .filter(fk_column == item.id)
+            .count()
+        )
+        if usage_count:
+            abort(409, message="Cadastro em uso por transacoes.")
+
+        (
+            s.query(Transaction)
+            .filter(Transaction.user_id == current_user.id)
+            .filter(Transaction.is_deleted.is_(True))
+            .filter(fk_column == item.id)
+            .update({fk_column: None}, synchronize_session=False)
+        )
+        s.delete(item)
+        s.commit()
+        return {"id": item_id, "deleted": True}, 200
     finally:
         s.close()

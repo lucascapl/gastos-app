@@ -10,7 +10,6 @@ from .api.auth import blp as auth_blp
 import os
 
 from .extensions import jwt, bcrypt
-from .db import Base, engine
 from .jwt_callbacks import register_jwt_callbacks
 
 
@@ -44,8 +43,6 @@ def create_app():
     jwt.init_app(app)
     bcrypt.init_app(app)
     register_jwt_callbacks(jwt)
-
-    Base.metadata.create_all(bind=engine)
 
     api = Api(app)
     api.register_blueprint(transactions_blp)

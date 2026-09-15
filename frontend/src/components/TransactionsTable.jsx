@@ -1,11 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataGrid } from "@mui/x-data-grid";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { IconButton, Tooltip } from "@mui/material";
 import Swal from "sweetalert2";
 import { api } from "../api";
 
 const brl = (v) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
     .format(Number(v || 0));
+
+const pad = (value) => String(value).padStart(2, "0");
+
+const addOneMonth = (isoDate) => {
+  const [year, month, day] = String(isoDate || "").split("-").map(Number);
+  if (!year || !month || !day) return isoDate;
+
+  const target = new Date(year, month, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(Math.min(day, lastDay))}`;
+};
 
 export default function TransactionsTable({ items, optionsVersion = 0, onSaved }) {
   const [rows, setRows] = useState([]);
@@ -27,7 +40,55 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
   }, [optionsVersion]);
 
   // colunas com edição inline; metodo de pagamento e person como selects
+  const duplicateNextMonth = useCallback(async (row) => {
+    const payload = {
+      value: row.value,
+      event: row.event,
+      day: addOneMonth(row.day),
+      category: row.category || "",
+      payment: row.payment || "",
+      person: row.person || "",
+      tx_type: row.tx_type || "normal",
+    };
+
+    try {
+      await api.post("/transactions", payload);
+      Swal.fire({
+        title: "Compra recriada!",
+        text: `Nova data: ${payload.day}`,
+        icon: "success",
+        timer: 1600,
+        showConfirmButton: false,
+      });
+      onSaved && onSaved();
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Nao foi possivel recriar a compra.";
+      Swal.fire({ title: "Erro", text: msg, icon: "error" });
+    }
+  }, [onSaved]);
+
   const columns = useMemo(() => ([
+    {
+      field: "_actions",
+      headerName: "",
+      width: 64,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <Tooltip title="Recriar para o proximo mes">
+          <IconButton
+            size="small"
+            onClick={(event) => {
+              event.stopPropagation();
+              duplicateNextMonth(params.row);
+            }}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    },
     { field: "id", headerName: "ID", width: 80 },
     { field: "day", headerName: "Data", width: 115, editable: true },
     { field: "event", headerName: "Evento", flex: 1, minWidth: 180, editable: true },
@@ -80,7 +141,7 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
       type: "singleSelect",
       valueOptions: options.people,
     },
-  ]), [options]);
+  ]), [duplicateNextMonth, options]);
 
   // envia apenas dos campos alterados
   const diffPayload = (newRow, oldRow) => {
@@ -118,7 +179,7 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
     } catch (err) {
       // Falha — erro e abortamos a atualização visual
       let msg = "Não foi possível salvar a alteração.";
-      try { msg = err?.response?.data?.message || msg; } catch {}
+      if (err?.response?.data?.message) msg = err.response.data.message;
       Swal.fire({ title: "Erro", text: msg, icon: "error" });
       throw err;
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { ThemeProvider, CssBaseline, Container, IconButton, Tooltip } from "@mui/material";
+import { ThemeProvider, CssBaseline, IconButton, Tooltip } from "@mui/material";
 import { getTheme } from "./theme";
 import { LightMode, DarkMode } from "@mui/icons-material";
 
@@ -49,16 +49,14 @@ function Root() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container maxWidth="lg">
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 0" }}>
-          <Tooltip title={mode === "light" ? "Usar modo escuro" : "Usar modo claro"}>
-            <IconButton onClick={toggleMode} color="inherit" aria-label="Alternar tema claro/escuro">
-              {mode === "light" ? <DarkMode /> : <LightMode />}
-            </IconButton>
-          </Tooltip>
-        </div>
-        <App />
-      </Container>
+      <div style={{ position: "fixed", top: 8, right: 12, zIndex: 1400 }}>
+        <Tooltip title={mode === "light" ? "Usar modo escuro" : "Usar modo claro"}>
+          <IconButton onClick={toggleMode} color="inherit" aria-label="Alternar tema claro/escuro">
+            {mode === "light" ? <DarkMode /> : <LightMode />}
+          </IconButton>
+        </Tooltip>
+      </div>
+      <App />
     </ThemeProvider>
   );
 }

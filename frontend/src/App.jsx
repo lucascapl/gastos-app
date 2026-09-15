@@ -18,6 +18,7 @@ function applyFilters(items, f) {
     if (f.from && t.day < f.from) return false;
     if (f.to && t.day > f.to) return false;
     if (f.category && t.category !== f.category) return false;
+    if (f.bank && t.bank !== f.bank) return false;
     if (f.person && t.person !== f.person) return false;
     if (f.payment && t.payment !== f.payment) return false;
     if (f.q) {
@@ -31,7 +32,7 @@ function applyFilters(items, f) {
 export default function App() {
   const [items, setItems] = useState([]);
   const [filters, setFilters] = useState({
-    from: "", to: "", category: "", person: "", payment: "", q: ""
+    from: "", to: "", category: "", bank: "", person: "", payment: "", q: ""
   });
   const [loading, setLoading] = useState(false);
   const [balanceRefresh, setBalanceRefresh] = useState(0);
@@ -117,7 +118,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: "36px auto", padding: "0 16px" }}>
+    <div style={{ maxWidth: 1280, margin: "36px auto", padding: "0 16px" }}>
       <WelcomeModal/>
       <Stack spacing={1} sx={{ mt: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -158,6 +159,7 @@ export default function App() {
             (async () => {
               await load();
               setBalanceRefresh((x) => x + 1);
+              setOptionsVersion((x) => x + 1);
             })();
           }}
         />

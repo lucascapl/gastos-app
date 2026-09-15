@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataGrid } from "@mui/x-data-grid";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { IconButton, Tooltip } from "@mui/material";
 import Swal from "sweetalert2";
 import { api } from "../api";
@@ -24,6 +25,7 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
   const [rows, setRows] = useState([]);
   const [options, setOptions] = useState({
     categories: [],
+    banks: [],
     payment_methods: [],
     people: [],
   });
@@ -35,7 +37,7 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
   useEffect(() => {
     (async () => {
       const { data } = await api.get("/transactions/options");
-      setOptions(data || { categories: [], payment_methods: [], people: [] });
+      setOptions(data || { categories: [], banks: [], payment_methods: [], people: [] });
     })();
   }, [optionsVersion]);
 
@@ -46,6 +48,7 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
       event: row.event,
       day: addOneMonth(row.day),
       category: row.category || "",
+      bank: row.bank || "",
       payment: row.payment || "",
       person: row.person || "",
       tx_type: row.tx_type || "normal",
@@ -67,35 +70,42 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
     }
   }, [onSaved]);
 
+  const deleteTransaction = useCallback(async (row) => {
+    const result = await Swal.fire({
+      title: "Excluir transacao?",
+      text: "Ela sera removida da lista, mas mantida no banco como apagada.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Excluir",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d32f2f",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await api.delete(`/transactions/${row.id}`);
+      Swal.fire({
+        title: "Transacao excluida!",
+        icon: "success",
+        timer: 1400,
+        showConfirmButton: false,
+      });
+      onSaved && onSaved();
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Nao foi possivel excluir a transacao.";
+      Swal.fire({ title: "Erro", text: msg, icon: "error" });
+    }
+  }, [onSaved]);
+
   const columns = useMemo(() => ([
-    {
-      field: "_actions",
-      headerName: "",
-      width: 64,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      renderCell: (params) => (
-        <Tooltip title="Recriar para o proximo mes">
-          <IconButton
-            size="small"
-            onClick={(event) => {
-              event.stopPropagation();
-              duplicateNextMonth(params.row);
-            }}
-          >
-            <ContentCopyIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      ),
-    },
-    { field: "id", headerName: "ID", width: 80 },
-    { field: "day", headerName: "Data", width: 115, editable: true },
-    { field: "event", headerName: "Evento", flex: 1, minWidth: 180, editable: true },
+    { field: "id", headerName: "ID", width: 64 },
+    { field: "day", headerName: "Data", width: 112, editable: true },
+    { field: "event", headerName: "Evento", flex: 1.4, minWidth: 170, editable: true },
     {
       field: "value",
       headerName: "Valor",
-      width: 130,
+      width: 118,
       editable: true,
 
       // texto mostrado na célula (fora do modo edição)
@@ -120,15 +130,26 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
     {
       field: "category",
       headerName: "Categoria",
-      width: 160,
+      flex: 0.8,
+      minWidth: 130,
       editable: true,
       type: "singleSelect",
       valueOptions: options.categories,
     },
     {
+      field: "bank",
+      headerName: "Banco",
+      flex: 0.75,
+      minWidth: 120,
+      editable: true,
+      type: "singleSelect",
+      valueOptions: options.banks,
+    },
+    {
       field: "payment",
-      headerName: "Tipo de pagamento",
-      width: 180,
+      headerName: "Pagamento",
+      flex: 0.8,
+      minWidth: 130,
       editable: true,
       type: "singleSelect",
       valueOptions: options.payment_methods,
@@ -136,16 +157,54 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
     {
       field: "person",
       headerName: "Pessoa",
-      width: 160,
+      flex: 0.8,
+      minWidth: 130,
       editable: true,
       type: "singleSelect",
       valueOptions: options.people,
     },
-  ]), [duplicateNextMonth, options]);
+    {
+      field: "_actions",
+      headerName: "",
+      width: 96,
+      align: "center",
+      headerAlign: "center",
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <>
+          <Tooltip title="Recriar para o proximo mes">
+            <IconButton
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                duplicateNextMonth(params.row);
+              }}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Excluir transacao">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={(event) => {
+                event.stopPropagation();
+                deleteTransaction(params.row);
+              }}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </>
+      ),
+    },
+  ]), [deleteTransaction, duplicateNextMonth, options]);
 
   // envia apenas dos campos alterados
   const diffPayload = (newRow, oldRow) => {
-    const fields = ["day", "event", "value", "category", "payment", "person"];
+    const fields = ["day", "event", "value", "category", "bank", "payment", "person"];
     const payload = {};
     for (const f of fields) {
       if (newRow[f] !== oldRow[f]) payload[f] = newRow[f];

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Date, Numeric, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 import enum
 
@@ -61,6 +61,9 @@ class Transaction(Base):
     value = Column(Numeric(12,2), nullable=False)
     event = Column(String, nullable=False)
     day = Column(Date, nullable=False)
+    bank = Column(String, nullable=True)
+    is_deleted = Column(Boolean, nullable=False, default=False, index=True)
+    deleted_at = Column(DateTime, nullable=True)
 
     payment_method_id = Column(Integer, ForeignKey("payment_methods.id"))
     category_id = Column(Integer, ForeignKey("categories.id"))

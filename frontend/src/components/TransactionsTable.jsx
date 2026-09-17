@@ -23,6 +23,8 @@ const addOneMonth = (isoDate) => {
 
 export default function TransactionsTable({ items, optionsVersion = 0, onSaved }) {
   const [rows, setRows] = useState([]);
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 8 });
+  const [sortModel, setSortModel] = useState([]);
   const [options, setOptions] = useState({
     categories: [],
     banks: [],
@@ -32,6 +34,13 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
 
   // mantém as linhas sincronizadas com o filtro vindo do App.jsx
   useEffect(() => { setRows(items); }, [items]);
+
+  useEffect(() => {
+    setPaginationModel((prev) => {
+      const lastPage = Math.max(0, Math.ceil(rows.length / prev.pageSize) - 1);
+      return prev.page > lastPage ? { ...prev, page: lastPage } : prev;
+    });
+  }, [rows.length]);
 
   // carrega opções para os selects (recarrega quando optionsVersion mudar)
   useEffect(() => {
@@ -259,7 +268,10 @@ export default function TransactionsTable({ items, optionsVersion = 0, onSaved }
         onProcessRowUpdateError={handleProcessRowUpdateError}
         disableRowSelectionOnClick
         pageSizeOptions={[8, 15, 25, 50]}
-        initialState={{ pagination: { paginationModel: { pageSize: 8 } } }}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        sortModel={sortModel}
+        onSortModelChange={setSortModel}
       />
     </div>
   );

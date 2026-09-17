@@ -71,14 +71,14 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       const { data } = await api.get("/transactions");
       const normalized = data.map((t) => ({ ...t, day: t.day?.slice(0, 10) }));
       setItems(normalized);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
@@ -284,7 +284,7 @@ export default function App() {
                 optionsVersion={optionsVersion}
                 onSaved={() => {
                   (async () => {
-                    await load();
+                    await load({ showLoading: false });
                     setBalanceRefresh((x) => x + 1);
                     setOptionsVersion((x) => x + 1);
                   })();

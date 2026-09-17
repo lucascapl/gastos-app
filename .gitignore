@@ -19,3 +19,12 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Dados reais e backups
+backups/
+*.dump
+
+# Credenciais
+.env
+backend/.env
+frontend/.env

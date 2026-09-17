@@ -137,6 +137,28 @@ Você deve ver o app carregando e se comunicando com o backend.
 
 ## 5) Como usar
 
+### Iniciar tudo localmente com um comando
+
+Depois da configuracao inicial do backend e do frontend, voce pode subir tudo no Windows rodando, na raiz do projeto:
+
+```cmd
+start-dev.bat
+```
+
+Esse script abre duas janelas de terminal:
+- backend Flask em `http://localhost:5000`
+- frontend Vite em `http://localhost:5173`
+
+Depois de alguns segundos ele tambem abre o navegador em `http://localhost:5173`.
+
+Para parar, use `Ctrl + C` nas janelas abertas ou feche os terminais.
+
+Observacoes:
+- O backend roda `alembic upgrade head` antes de subir, para manter o banco local atualizado.
+- O frontend cria `frontend/.env` se faltar.
+- O frontend roda `npm install` automaticamente se `node_modules` ainda nao existir.
+- Para desenvolvimento local, voce nao precisa usar Docker Compose; o script e mais leve e usa hot reload do Flask/Vite.
+
 1. **Adicionar transações** no formulário superior:  
    - **Valor**: negativo para gastos, positivo para receitas  
    - **Evento**: descrição (ex.: “Mercado”, “Salário”)  

@@ -16,6 +16,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, nullable=False, unique=True, index=True)
     password_hash = Column(String, nullable=False)
+    initial_balance = Column(Numeric(12,2), nullable=False, default=0)
 
     def set_password(self, password: str) -> None:
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
@@ -42,6 +43,19 @@ class PaymentMethod(Base):
     name = Column(String, nullable=False)
 
     user = relationship("User")
+
+class Bank(Base):
+    __tablename__ = "banks"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_banks_user_name"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    closing_day = Column(Integer, nullable=True)
+    investments_only = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User")
+
 class Person(Base):
     __tablename__ = "people"
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_people_user_name"),)
@@ -62,6 +76,7 @@ class Transaction(Base):
     event = Column(String, nullable=False)
     day = Column(Date, nullable=False)
     bank = Column(String, nullable=True)
+    is_projected = Column(Boolean, nullable=False, default=False, index=True)
     is_deleted = Column(Boolean, nullable=False, default=False, index=True)
     deleted_at = Column(DateTime, nullable=True)
 

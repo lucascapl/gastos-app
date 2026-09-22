@@ -1,152 +1,170 @@
-// src/components/BillingCycleBar.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box, Stack, TextField, IconButton,
-  FormControl, InputLabel, Select, MenuItem, Tooltip
+  Box,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Typography,
 } from "@mui/material";
-import { Lock, LockOpen } from "@mui/icons-material";
+import { api } from "../api";
 
-/* ==================== Cookies ==================== */
-const COOKIE_NAME = "billingClosingDay";
-function setCookie(name, value, days = 365) {
-  const d = new Date(); d.setTime(d.getTime() + days*24*60*60*1000);
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/`;
-}
-function getCookie(name) {
-  const key = `${name}=`;
-  const hit = document.cookie.split(";").map(c=>c.trim()).find(c=>c.startsWith(key));
-  return hit ? decodeURIComponent(hit.substring(key.length)) : null;
+const pad = (value) => String(value).padStart(2, "0");
+const toISO = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const monthLastDay = (year, month) => new Date(year, month, 0).getDate();
+const makeClosingDateFor = (year, month, day) => (
+  new Date(year, month - 1, Math.min(day, monthLastDay(year, month)))
+);
+
+function addMonthsKeepDay(date, months) {
+  const desired = date.getDate();
+  const month = date.getMonth() + months + 1;
+  const year = date.getFullYear() + Math.floor((month - 1) / 12);
+  const monthIndex = ((month - 1) % 12 + 12) % 12;
+  const last = monthLastDay(year, monthIndex + 1);
+  return new Date(year, monthIndex, Math.min(desired, last));
 }
 
-/* ==================== Date helpers ==================== */
-const pad = (n) => String(n).padStart(2, "0");
-const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const monthLastDay = (y,m)=> new Date(y,m,0).getDate();
-const makeClosingDateFor = (y,m,day)=> new Date(y, m-1, Math.min(day, monthLastDay(y,m)));
-function addMonthsKeepDay(d, months) {
-  const desired = d.getDate();
-  const y = d.getFullYear(), m = d.getMonth() + months + 1;
-  const ny = y + Math.floor((m-1)/12);
-  const nm = ((m-1)%12 + 12) % 12;
-  const last = monthLastDay(ny, nm+1);
-  return new Date(ny, nm, Math.min(desired, last));
-}
-function computeCycle(closingDay, year, month /*1-12*/) {
+function computeCycle(closingDay, year, month) {
   const start = makeClosingDateFor(year, month, closingDay);
   const nextStart = addMonthsKeepDay(start, 1);
-  const end = new Date(nextStart); end.setDate(end.getDate()-1);
+  const end = new Date(nextStart);
+  end.setDate(end.getDate() - 1);
   return { startISO: toISO(start), endISO: toISO(end) };
 }
+
 function buildMonthOptions(count = 24) {
-  const now = new Date(), arr = [];
-  for (let i=0;i<count;i++){
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    arr.push({ value: `${d.getFullYear()}-${pad(d.getMonth()+1)}`, year: d.getFullYear(), month: d.getMonth()+1 });
+  const now = new Date();
+  const options = [];
+  for (let index = 0; index < count; index += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    options.push({
+      value: `${date.getFullYear()}-${pad(date.getMonth() + 1)}`,
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+    });
   }
-  return arr;
+  return options;
 }
-const monthNames = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 
-/* ==================== Component ==================== */
-export default function BillingCycleBar({ defaultLocked=false, onChange }) {
-  const [closingDate, setClosingDate] = useState("");  // "YYYY-MM-DD"
-  const [locked, setLocked] = useState(defaultLocked);
-  const [month, setMonth] = useState("");              // "" = Selecionado nenhum; senão "YYYY-MM"
+const monthNames = [
+  "janeiro",
+  "fevereiro",
+  "marco",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
+
+export default function BillingCycleBar({ onChange }) {
+  const [banks, setBanks] = useState([]);
+  const [bankName, setBankName] = useState("");
+  const [month, setMonth] = useState("");
   const months = useMemo(() => buildMonthOptions(24), []);
-  const cookieClosingDay = getCookie(COOKIE_NAME);
+  const selectedBank = banks.find((bank) => bank.name === bankName);
+  const closingDay = Number(selectedBank?.closing_day || 0);
 
-  // Pré-preenche a data a partir do cookie (somente o dia) no mês atual.
   useEffect(() => {
-    const now = new Date();
-    const dayFromCookie = cookieClosingDay ? Number(cookieClosingDay) : null;
-    if (dayFromCookie && !closingDate) {
-      const d = makeClosingDateFor(now.getFullYear(), now.getMonth()+1, dayFromCookie);
-      setClosingDate(toISO(d));
-      setLocked(true); // opcional: já começar travado quando há cookie
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    (async () => {
+      try {
+        const { data } = await api.get("/profile");
+        setBanks((data?.banks || []).filter((bank) => !bank.investments_only));
+      } catch {
+        setBanks([]);
+      }
+    })();
   }, []);
 
-  const closingDay = useMemo(() => {
-    if (closingDate) {
-      const d = new Date(closingDate + "T00:00:00");
-      return d.getDate();
-    }
-    return cookieClosingDay ? Number(cookieClosingDay) : null;
-  }, [closingDate, cookieClosingDay]);
+  const clearSelection = () => {
+    setMonth("");
+    onChange?.({ from: "", to: "", payment: "", bank: "" });
+  };
 
-  const handleLockToggle = () => setLocked(x => !x);
-
-  const applySelection = (mValue) => {
-    if (!closingDay) return;
-    if (!mValue) {
-      // “Selecione”: limpar filtros
-      onChange?.({ from: undefined, to: undefined, payment: undefined, meta: { label: "Sem filtro de fatura" } });
+  const applySelection = (monthValue) => {
+    if (!monthValue || !bankName || !closingDay) {
+      onChange?.({ from: "", to: "", payment: "", bank: bankName || "" });
       return;
     }
-    const [y, m] = mValue.split("-").map(Number);
-    const { startISO, endISO } = computeCycle(closingDay, y, m);
+
+    const [year, selectedMonth] = monthValue.split("-").map(Number);
+    const { startISO, endISO } = computeCycle(closingDay, year, selectedMonth);
     onChange?.({
       from: startISO,
       to: endISO,
-      payment: "Credito", // sempre crédito quando um mês é escolhido
-      meta: { label: `Ciclo ${pad(m)}/${y} (${startISO} → ${endISO})`, closingDay }
+      bank: bankName,
+      payment: "Credito",
+      meta: { closingDay },
     });
   };
 
   return (
-    <Box sx={{ mt:2, mb:1 }}>
-      <Stack direction={{ xs:"column", sm:"row" }} spacing={2} alignItems="center">
-        {/* Fechamento (salva APENAS o dia no cookie) */}
-        <Stack direction="row" spacing={1} alignItems="center">
-          <TextField
-            label="Fechamento da fatura"
-            type="date"
-            value={closingDate}
-            onChange={(e) => {
-              const v = e.target.value; setClosingDate(v); setMonth("");
-              if (v) {
-                const d = new Date(v + "T00:00:00");
-                setCookie(COOKIE_NAME, String(d.getDate()), 365);
-              }
-              // ao mudar o fechamento, também limpamos o filtro atual
-              onChange?.({ from: undefined, to: undefined, payment: undefined });
+    <Box sx={{ mt: 2, mb: 1 }}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel id="billing-bank-label">Banco</InputLabel>
+          <Select
+            labelId="billing-bank-label"
+            label="Banco"
+            value={bankName}
+            onChange={(event) => {
+              const nextBank = event.target.value;
+              setBankName(nextBank);
+              setMonth("");
+              onChange?.({ from: "", to: "", payment: "", bank: nextBank || "" });
             }}
-            InputLabelProps={{ shrink: true }}
-            size="small"
-            disabled={locked && !!closingDate}
-          />
-          <Tooltip title={locked ? "Destravar edição" : "Travar fechamento"}>
-            <span>
-              <IconButton onClick={handleLockToggle} disabled={!closingDay} size="small">
-                {locked && closingDay ? <Lock /> : <LockOpen />}
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
+          >
+            <MenuItem value=""><em>Selecione</em></MenuItem>
+            {banks.map((bank) => (
+              <MenuItem key={bank.id} value={bank.name}>{bank.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-        {/* Select de mês (com opção 'Selecione') */}
-        {locked && closingDay && (
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id="billing-month-label">Ver fatura de</InputLabel>
-            <Select
-              labelId="billing-month-label"
-              label="Ver fatura de"
-              value={month}
-              onChange={(e) => {
-                const v = e.target.value;
-                setMonth(v);
-                applySelection(v);
-              }}
-            >
-              <MenuItem value=""><em>Selecione</em></MenuItem>
-              {months.map((m) => (
-                <MenuItem key={m.value} value={m.value}>
-                  {`${monthNames[m.month-1]} de ${m.year}`}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <Box sx={{ minWidth: 180 }}>
+          <Typography variant="caption" color="text.secondary">Fechamento</Typography>
+          <Typography variant="body2" fontWeight={700}>
+            {bankName
+              ? (closingDay ? `Dia ${closingDay}` : "Nao cadastrado")
+              : "Selecione um banco"}
+          </Typography>
+        </Box>
+
+        <FormControl size="small" sx={{ minWidth: 220 }} disabled={!bankName || !closingDay}>
+          <InputLabel id="billing-month-label">Ver fatura de</InputLabel>
+          <Select
+            labelId="billing-month-label"
+            label="Ver fatura de"
+            value={month}
+            onChange={(event) => {
+              const value = event.target.value;
+              setMonth(value);
+              if (!value) {
+                clearSelection();
+              } else {
+                applySelection(value);
+              }
+            }}
+          >
+            <MenuItem value=""><em>Selecione</em></MenuItem>
+            {months.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {`${monthNames[item.month - 1]} de ${item.year}`}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {bankName && !closingDay && (
+          <Typography variant="body2" color="warning.main">
+            Cadastre o fechamento em Edicao &gt; Bancos.
+          </Typography>
         )}
       </Stack>
     </Box>

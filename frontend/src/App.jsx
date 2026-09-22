@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, getOwner } from "./api";
 import Filters from "./components/Filters";
-import Summary from "./components/Summary";
 import TransactionsTable from "./components/TransactionsTable";
 import TransactionForm from "./components/TransactionForm";
 import BillingCycleBar from "./components/BillingCycleBar";
 import BalanceCard from "./components/BalanceCard";
+import InvoiceBreakdownCard from "./components/InvoiceBreakdownCard";
 import WelcomeModal from "./components/WelcomeModal";
 import ReferenceDataEditor from "./components/ReferenceDataEditor";
 import InvoiceSummary from "./components/InvoiceSummary";
+import AnnualProjection from "./components/AnnualProjection";
+import InvestmentsView from "./components/InvestmentsView";
+import ProfileSettings from "./components/ProfileSettings";
 import {
   Box,
   Button,
   Divider,
   Drawer,
+  Grid,
   List,
   ListItemButton,
   ListItemIcon,
@@ -24,6 +28,9 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import HomeIcon from "@mui/icons-material/Home";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import SavingsIcon from "@mui/icons-material/Savings";
+import PersonIcon from "@mui/icons-material/Person";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register"; // se não criar, remova esse import e o fluxo de register
@@ -32,6 +39,9 @@ import { clearToken, isLoggedIn } from "./auth";
 const drawerWidth = 220;
 
 function viewFromPath() {
+  if (window.location.pathname === "/profile") return "profile";
+  if (window.location.pathname === "/investments") return "investments";
+  if (window.location.pathname === "/projection") return "projection";
   if (window.location.pathname === "/summary") return "summary";
   return window.location.pathname === "/edit" ? "edit" : "home";
 }
@@ -64,6 +74,8 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState("login"); // "login" | "register" | "app"
   const [appView, setAppView] = useState(viewFromPath);
+  const [profile, setProfile] = useState(null);
+  const [showTransactionForm, setShowTransactionForm] = useState(true);
 
   useEffect(() => {
     const handlePopState = () => setAppView(viewFromPath());
@@ -82,12 +94,24 @@ export default function App() {
     }
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    try {
+      const { data } = await api.get("/profile");
+      setProfile(data);
+      return data;
+    } catch {
+      setProfile(null);
+      return null;
+    }
+  }, []);
+
   const boot = useCallback(async () => {
     setReady(false);
 
     if (!isLoggedIn()) {
       setOwner(null);
       setItems([]);
+      setProfile(null);
       setScreen("login");
       setReady(true);
       return;
@@ -98,6 +122,7 @@ export default function App() {
       // token inválido/expirado -> interceptor limpou
       setOwner(null);
       setItems([]);
+      setProfile(null);
       setScreen("login");
       setReady(true);
       return;
@@ -105,13 +130,17 @@ export default function App() {
 
     setOwner(o);
     setScreen("app");
+    await loadProfile();
     await load();
     setReady(true);
-  }, [load]);
+  }, [load, loadProfile]);
 
   useEffect(() => { boot(); }, [boot]);
 
-  const filtered = useMemo(() => applyFilters(items, filters), [items, filters]);
+  const cashFlowItems = useMemo(() => {
+    return items.filter((item) => !item.is_projected);
+  }, [items]);
+  const cashFlowFiltered = useMemo(() => applyFilters(cashFlowItems, filters), [cashFlowItems, filters]);
 
   const create = async (payload) => {
     await api.post("/transactions", payload);
@@ -124,12 +153,23 @@ export default function App() {
     clearToken();
     setOwner(null);
     setItems([]);
+    setProfile(null);
     setScreen("login");
   };
 
   const navigateApp = (view) => {
     setAppView(view);
-    const path = view === "edit" ? "/edit" : view === "summary" ? "/summary" : "/home";
+    const path = view === "edit"
+      ? "/edit"
+      : view === "summary"
+        ? "/summary"
+        : view === "projection"
+          ? "/projection"
+          : view === "investments"
+            ? "/investments"
+            : view === "profile"
+              ? "/profile"
+              : "/cash-flow";
     window.history.pushState({}, "", path);
   };
 
@@ -178,15 +218,27 @@ export default function App() {
         <List>
           <ListItemButton selected={appView === "home"} onClick={() => navigateApp("home")}>
             <ListItemIcon><HomeIcon /></ListItemIcon>
-            <ListItemText primary="Home" />
+            <ListItemText primary="Fluxo de caixa" />
+          </ListItemButton>
+          <ListItemButton selected={appView === "projection"} onClick={() => navigateApp("projection")}>
+            <ListItemIcon><ShowChartIcon /></ListItemIcon>
+            <ListItemText primary="Projecao anual" />
+          </ListItemButton>
+          <ListItemButton selected={appView === "investments"} onClick={() => navigateApp("investments")}>
+            <ListItemIcon><SavingsIcon /></ListItemIcon>
+            <ListItemText primary="Investimentos" />
           </ListItemButton>
           <ListItemButton selected={appView === "edit"} onClick={() => navigateApp("edit")}>
             <ListItemIcon><EditIcon /></ListItemIcon>
             <ListItemText primary="Edicao" />
           </ListItemButton>
+          <ListItemButton selected={appView === "profile"} onClick={() => navigateApp("profile")}>
+            <ListItemIcon><PersonIcon /></ListItemIcon>
+            <ListItemText primary="Perfil" />
+          </ListItemButton>
           <ListItemButton selected={appView === "summary"} onClick={() => navigateApp("summary")}>
             <ListItemIcon><ReceiptLongIcon /></ListItemIcon>
-            <ListItemText primary="Resumo" />
+            <ListItemText primary="Resumo de fatura" />
           </ListItemButton>
         </List>
         <Box sx={{ flexGrow: 1 }} />
@@ -224,13 +276,31 @@ export default function App() {
               variant={appView === "home" ? "contained" : "outlined"}
               onClick={() => navigateApp("home")}
             >
-              Home
+              Fluxo
+            </Button>
+            <Button
+              variant={appView === "projection" ? "contained" : "outlined"}
+              onClick={() => navigateApp("projection")}
+            >
+              Projecao
+            </Button>
+            <Button
+              variant={appView === "investments" ? "contained" : "outlined"}
+              onClick={() => navigateApp("investments")}
+            >
+              Invest.
             </Button>
             <Button
               variant={appView === "edit" ? "contained" : "outlined"}
               onClick={() => navigateApp("edit")}
             >
               Edicao
+            </Button>
+            <Button
+              variant={appView === "profile" ? "contained" : "outlined"}
+              onClick={() => navigateApp("profile")}
+            >
+              Perfil
             </Button>
             <Button
               variant={appView === "summary" ? "contained" : "outlined"}
@@ -249,14 +319,67 @@ export default function App() {
               load();
             }}
           />
+        ) : appView === "profile" ? (
+          <ProfileSettings onSaved={loadProfile} />
         ) : appView === "summary" ? (
-          <InvoiceSummary items={items} />
+          <InvoiceSummary items={cashFlowItems} />
+        ) : appView === "investments" ? (
+          <>
+            <Stack spacing={1} sx={{ display: { xs: "none", md: "block" } }}>
+              <Typography variant="h3" fontWeight={700}>Investimentos</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Aplicacoes e resgates de <b>{owner}</b> em 2026.
+              </Typography>
+            </Stack>
+
+            <InvestmentsView
+              items={items}
+              owner={owner}
+              optionsVersion={optionsVersion}
+              profile={profile}
+              onSaved={() => {
+                (async () => {
+                  await load({ showLoading: false });
+                  setBalanceRefresh((x) => x + 1);
+                  setOptionsVersion((x) => x + 1);
+                })();
+              }}
+            />
+          </>
+        ) : appView === "projection" ? (
+          <>
+            <Stack spacing={1} sx={{ display: { xs: "none", md: "block" } }}>
+              <Typography variant="h3" fontWeight={700}>Projecao anual</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Transacoes de <b>{owner}</b> em 2026, incluindo lancamentos futuros.
+              </Typography>
+            </Stack>
+
+            <TransactionForm
+              onSubmit={create}
+              owner={owner}
+              optionsVersion={optionsVersion}
+              defaultProjected
+            />
+            <AnnualProjection
+              items={items}
+              owner={owner}
+              optionsVersion={optionsVersion}
+              onSaved={() => {
+                (async () => {
+                  await load({ showLoading: false });
+                  setBalanceRefresh((x) => x + 1);
+                  setOptionsVersion((x) => x + 1);
+                })();
+              }}
+            />
+          </>
         ) : (
           <>
             <Stack spacing={1} sx={{ display: { xs: "none", md: "block" } }}>
-              <Typography variant="h3" fontWeight={700}>Home</Typography>
+              <Typography variant="h3" fontWeight={700}>Fluxo de caixa</Typography>
               <Typography variant="body2" color="text.secondary">
-                Bem vindo, <b>{owner}!</b>
+                Mes e fatura atuais, sem entradas e saidas futuras.
               </Typography>
             </Stack>
 
@@ -266,21 +389,42 @@ export default function App() {
                   ...prev,
                   from: f.from,
                   to: f.to,
-                  payment: f.payment
+                  payment: f.payment,
+                  bank: f.bank || ""
                 }));
               }}
             />
 
-            <TransactionForm onSubmit={create} owner={owner} optionsVersion={optionsVersion} />
-            <BalanceCard refreshKey={balanceRefresh} owner={owner} />
-            <Filters data={items} value={filters} onChange={setFilters} />
-            <Summary items={filtered} />
+            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setShowTransactionForm((value) => !value)}
+              >
+                {showTransactionForm ? "Ocultar" : "Mostrar"}
+              </Button>
+            </Stack>
+            {showTransactionForm && (
+              <TransactionForm
+                onSubmit={create}
+                owner={owner}
+                optionsVersion={optionsVersion}
+                defaultProjected={false}
+              />
+            )}
+            <Grid container spacing={2} sx={{ mt: 1 }} justifyContent="center">
+              <Grid item xs={12} md={7}>
+                <BalanceCard owner={owner} items={cashFlowItems} profile={profile} />
+              </Grid>
+            </Grid>
+            <Filters data={cashFlowItems} value={filters} onChange={setFilters} />
+            <InvoiceBreakdownCard items={cashFlowFiltered} owner={owner} filters={filters} />
 
             {loading ? (
               <div>Carregando...</div>
             ) : (
               <TransactionsTable
-                items={filtered}
+                items={cashFlowFiltered}
                 optionsVersion={optionsVersion}
                 onSaved={() => {
                   (async () => {

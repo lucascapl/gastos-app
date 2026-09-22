@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Divider,
@@ -19,15 +20,9 @@ import {
   Typography,
 } from "@mui/material";
 import { brl, unique } from "../utils";
+import { api } from "../api";
 
 const pad = (value) => String(value).padStart(2, "0");
-const BILLING_CLOSING_DAY_COOKIE = "billingClosingDay";
-
-function getCookie(name) {
-  const key = `${name}=`;
-  const hit = document.cookie.split(";").map(c => c.trim()).find(c => c.startsWith(key));
-  return hit ? decodeURIComponent(hit.substring(key.length)) : null;
-}
 
 const currentMonth = () => {
   const now = new Date();
@@ -74,6 +69,81 @@ const monthRange = (monthValue) => {
 
 const norm = (value) => String(value || "").trim().toLowerCase();
 
+const downloadSummaryPng = ({ rows, total, person, bank, periodLabel }) => {
+  const scale = 2;
+  const width = 920;
+  const rowHeight = 30;
+  const tableTop = 220;
+  const height = Math.max(360, tableTop + 48 + (rows.length || 1) * rowHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "700 30px Arial";
+  ctx.fillText("Resumo de fatura", 36, 52);
+
+  ctx.font = "400 15px Arial";
+  ctx.fillStyle = "#4b5563";
+  ctx.fillText(`Pessoa: ${person || "Todas"}`, 36, 88);
+  ctx.fillText(`Banco: ${bank || "Todos"}`, 36, 114);
+  ctx.fillText(`Periodo: ${periodLabel}`, 36, 140);
+
+  ctx.fillStyle = total < 0 ? "#b91c1c" : "#15803d";
+  ctx.font = "700 34px Arial";
+  ctx.fillText(brl(total), 36, 188);
+
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(36, 206);
+  ctx.lineTo(width - 36, 206);
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "700 14px Arial";
+  ctx.fillText("Data", 36, tableTop);
+  ctx.fillText("Evento", 150, tableTop);
+  ctx.fillText("Categoria", 560, tableTop);
+  ctx.textAlign = "right";
+  ctx.fillText("Valor", width - 36, tableTop);
+  ctx.textAlign = "left";
+
+  ctx.font = "400 14px Arial";
+  rows.forEach((row, index) => {
+    const y = tableTop + 30 + index * rowHeight;
+    ctx.fillStyle = index % 2 ? "#ffffff" : "#f9fafb";
+    ctx.fillRect(28, y - 21, width - 56, rowHeight);
+    ctx.fillStyle = "#111827";
+    ctx.fillText(row.day || "-", 36, y);
+    ctx.fillText(String(row.event || "-").slice(0, 52), 150, y);
+    ctx.fillText(String(row.category || "Sem categoria").slice(0, 28), 560, y);
+    ctx.textAlign = "right";
+    ctx.fillStyle = Number(row.value || 0) < 0 ? "#b91c1c" : "#15803d";
+    ctx.fillText(brl(row.value), width - 36, y);
+    ctx.textAlign = "left";
+  });
+
+  if (!rows.length) {
+    ctx.fillStyle = "#6b7280";
+    ctx.fillText("Nenhuma transacao encontrada para os filtros.", 36, tableTop + 34);
+  }
+
+  const link = document.createElement("a");
+  link.download = `resumo-fatura-${bank || "todos"}-${person || "todos"}.png`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_.-]+/g, "-")
+    .toLowerCase();
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+};
+
 export default function InvoiceSummary({ items = [] }) {
   const [mode, setMode] = useState("month");
   const [month, setMonth] = useState(currentMonth);
@@ -81,14 +151,38 @@ export default function InvoiceSummary({ items = [] }) {
   const [to, setTo] = useState("");
   const [person, setPerson] = useState("");
   const [bank, setBank] = useState("");
+  const [profileBanks, setProfileBanks] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/profile");
+        setProfileBanks(data.banks || []);
+      } catch {
+        setProfileBanks([]);
+      }
+    })();
+  }, []);
 
   const people = useMemo(() => unique(items.map((item) => item.person)), [items]);
   const banks = useMemo(() => unique(items.map((item) => item.bank)), [items]);
-  const closingDay = Number(getCookie(BILLING_CLOSING_DAY_COOKIE) || 0);
+  const closingDayByBank = useMemo(() => {
+    const map = new Map();
+    profileBanks.forEach((profileBank) => {
+      map.set(norm(profileBank.name), Number(profileBank.closing_day || 0));
+    });
+    return map;
+  }, [profileBanks]);
+  const selectedClosingDay = bank ? closingDayByBank.get(norm(bank)) || 0 : 0;
 
-  const range = mode === "month"
-    ? (billingCycleRange(month, closingDay) || monthRange(month))
+  const range = mode === "month" && bank
+    ? (billingCycleRange(month, selectedClosingDay) || monthRange(month))
+    : mode === "month"
+      ? monthRange(month)
     : { from, to };
+  const periodLabel = mode === "month" && !bank
+    ? `${month} (fechamento de cada banco quando cadastrado)`
+    : `${range.from || "-"} ate ${range.to || "-"}`;
 
   const rows = useMemo(() => {
     return items
@@ -96,12 +190,15 @@ export default function InvoiceSummary({ items = [] }) {
         if (norm(item.payment) !== "credito") return false;
         if (person && item.person !== person) return false;
         if (bank && item.bank !== bank) return false;
-        if (range.from && item.day < range.from) return false;
-        if (range.to && item.day > range.to) return false;
+        const itemRange = mode === "month" && !bank
+          ? (billingCycleRange(month, closingDayByBank.get(norm(item.bank)) || 0) || monthRange(month))
+          : range;
+        if (itemRange.from && item.day < itemRange.from) return false;
+        if (itemRange.to && item.day > itemRange.to) return false;
         return true;
       })
       .sort((a, b) => a.day.localeCompare(b.day) || a.id - b.id);
-  }, [bank, items, person, range.from, range.to]);
+  }, [bank, closingDayByBank, items, mode, month, person, range]);
 
   const total = rows.reduce((acc, row) => acc + Number(row.value || 0), 0);
 
@@ -169,7 +266,11 @@ export default function InvoiceSummary({ items = [] }) {
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}
                 InputLabelProps={{ shrink: true }}
-                helperText={closingDay ? `Usando fechamento dia ${closingDay}` : "Sem fechamento cadastrado: mes calendario"}
+                helperText={
+                  bank
+                    ? (selectedClosingDay ? `Usando fechamento dia ${selectedClosingDay}` : "Banco sem fechamento cadastrado: mes calendario")
+                    : "Todos: cada banco usa seu fechamento cadastrado"
+                }
                 fullWidth
               />
             ) : (
@@ -220,7 +321,7 @@ export default function InvoiceSummary({ items = [] }) {
             <Box>
               <Typography variant="subtitle2">Periodo</Typography>
               <Typography variant="body2" color="text.secondary">
-                {range.from || "-"} ate {range.to || "-"}
+                {periodLabel}
               </Typography>
             </Box>
             <Box>
@@ -230,6 +331,14 @@ export default function InvoiceSummary({ items = [] }) {
               </Typography>
             </Box>
           </Stack>
+          <Button
+            variant="outlined"
+            size="small"
+            sx={{ mt: 2 }}
+            onClick={() => downloadSummaryPng({ rows, total, person, bank, periodLabel })}
+          >
+            Exportar PNG
+          </Button>
 
           <Divider sx={{ my: 2 }} />
 

@@ -4,8 +4,10 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Divider,
+  FormControlLabel,
   IconButton,
   Stack,
   Tab,
@@ -23,14 +25,17 @@ import { api } from "../api";
 
 const EDITABLE_GROUPS = [
   { key: "categories", label: "Categorias" },
+  { key: "banks", label: "Bancos" },
   { key: "people", label: "Pessoas" },
   { key: "payment_methods", label: "Pagamentos" },
 ];
 
 export default function ReferenceDataEditor({ onChanged }) {
   const [activeTab, setActiveTab] = useState("categories");
-  const [data, setData] = useState({ categories: [], people: [], payment_methods: [] });
+  const [data, setData] = useState({ categories: [], banks: [], people: [], payment_methods: [] });
   const [drafts, setDrafts] = useState({});
+  const [closingDrafts, setClosingDrafts] = useState({});
+  const [investmentOnlyDrafts, setInvestmentOnlyDrafts] = useState({});
   const [newNames, setNewNames] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -40,14 +45,22 @@ export default function ReferenceDataEditor({ onChanged }) {
     setLoading(true);
     try {
       const { data: payload } = await api.get("/transactions/reference-data");
-      setData(payload || { categories: [], people: [], payment_methods: [] });
+      setData(payload || { categories: [], banks: [], people: [], payment_methods: [] });
       const nextDrafts = {};
+      const nextClosingDrafts = {};
+      const nextInvestmentOnlyDrafts = {};
       for (const group of EDITABLE_GROUPS) {
         for (const item of payload?.[group.key] || []) {
           nextDrafts[`${group.key}:${item.id}`] = item.name;
+          if (group.key === "banks") {
+            nextClosingDrafts[`${group.key}:${item.id}`] = item.closing_day || "";
+            nextInvestmentOnlyDrafts[`${group.key}:${item.id}`] = Boolean(item.investments_only);
+          }
         }
       }
       setDrafts(nextDrafts);
+      setClosingDrafts(nextClosingDrafts);
+      setInvestmentOnlyDrafts(nextInvestmentOnlyDrafts);
     } finally {
       setLoading(false);
     }
@@ -58,6 +71,12 @@ export default function ReferenceDataEditor({ onChanged }) {
   const setDraft = (kind, id, value) => {
     setDrafts((prev) => ({ ...prev, [`${kind}:${id}`]: value }));
   };
+  const setClosingDraft = (kind, id, value) => {
+    setClosingDrafts((prev) => ({ ...prev, [`${kind}:${id}`]: value }));
+  };
+  const setInvestmentOnlyDraft = (kind, id, value) => {
+    setInvestmentOnlyDrafts((prev) => ({ ...prev, [`${kind}:${id}`]: value }));
+  };
 
   const createItem = async (kind) => {
     const name = (newNames[kind] || "").trim();
@@ -67,7 +86,11 @@ export default function ReferenceDataEditor({ onChanged }) {
     }
 
     try {
-      await api.post(`/transactions/reference-data/${kind}`, { name });
+      await api.post(`/transactions/reference-data/${kind}`, {
+        name,
+        closing_day: kind === "banks" ? null : undefined,
+        investments_only: false,
+      });
       setNewNames((prev) => ({ ...prev, [kind]: "" }));
       await load();
       onChanged?.();
@@ -85,13 +108,18 @@ export default function ReferenceDataEditor({ onChanged }) {
 
   const saveItem = async (kind, item) => {
     const name = (drafts[`${kind}:${item.id}`] || "").trim();
+    const closingDay = closingDrafts[`${kind}:${item.id}`] || "";
+    const investmentsOnly = Boolean(investmentOnlyDrafts[`${kind}:${item.id}`]);
     if (!name) {
       Swal.fire({ title: "Nome obrigatorio", icon: "warning" });
       return;
     }
 
     try {
-      await api.patch(`/transactions/reference-data/${kind}/${item.id}`, { name });
+      await api.patch(`/transactions/reference-data/${kind}/${item.id}`, {
+        name,
+        ...(kind === "banks" ? { closing_day: closingDay, investments_only: investmentsOnly } : {}),
+      });
       await load();
       onChanged?.();
       Swal.fire({
@@ -142,7 +170,7 @@ export default function ReferenceDataEditor({ onChanged }) {
         <Box>
           <Typography variant="h4" fontWeight={700}>Edicao</Typography>
           <Typography variant="body2" color="text.secondary">
-            Ajuste nomes de categorias, pessoas e metodos de pagamento.
+            Ajuste nomes de categorias, bancos, pessoas e metodos de pagamento.
           </Typography>
         </Box>
         <Button
@@ -208,14 +236,22 @@ export default function ReferenceDataEditor({ onChanged }) {
 
             {activeItems.map((item) => {
               const draftKey = `${activeTab}:${item.id}`;
-              const changed = (drafts[draftKey] || "") !== item.name;
+              const nameChanged = (drafts[draftKey] || "") !== item.name;
+              const closingChanged = activeTab === "banks"
+                && String(closingDrafts[draftKey] ?? "") !== String(item.closing_day || "");
+              const investmentOnlyChanged = activeTab === "banks"
+                && Boolean(investmentOnlyDrafts[draftKey]) !== Boolean(item.investments_only);
+              const changed = nameChanged || closingChanged || investmentOnlyChanged;
 
               return (
                 <Box
                   key={item.id}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", sm: "minmax(220px, 1fr) auto auto" },
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: activeTab === "banks" ? "minmax(220px, 1fr) 130px 190px auto auto" : "minmax(220px, 1fr) auto auto",
+                    },
                     gap: 1,
                     alignItems: "center",
                   }}
@@ -226,10 +262,32 @@ export default function ReferenceDataEditor({ onChanged }) {
                     onChange={(event) => setDraft(activeTab, item.id, event.target.value)}
                     fullWidth
                   />
+                  {activeTab === "banks" && (
+                    <>
+                      <TextField
+                        size="small"
+                        label="Dia fechamento"
+                        type="number"
+                        value={closingDrafts[draftKey] ?? item.closing_day ?? ""}
+                        onChange={(event) => setClosingDraft(activeTab, item.id, event.target.value)}
+                        inputProps={{ min: 1, max: 31 }}
+                        fullWidth
+                      />
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={Boolean(investmentOnlyDrafts[draftKey])}
+                            onChange={(event) => setInvestmentOnlyDraft(activeTab, item.id, event.target.checked)}
+                          />
+                        }
+                        label="Apenas investimentos"
+                      />
+                    </>
+                  )}
                   <Chip
                     size="small"
                     variant="outlined"
-                    label={`${item.usage_count || 0} transacoes`}
+                    label={`Usado em ${item.usage_count || 0} transacoes`}
                   />
                   <Stack direction="row" justifyContent="flex-end">
                     <Tooltip title="Salvar alteracao">

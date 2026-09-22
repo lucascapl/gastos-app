@@ -6,6 +6,7 @@ from datetime import timedelta
 from .api.transactions import blp as transactions_blp
 from .api.balance import blp as balance_blp
 from .api.auth import blp as auth_blp
+from .api.profile import blp as profile_blp
 
 import os
 
@@ -48,6 +49,7 @@ def create_app():
     api.register_blueprint(transactions_blp)
     api.register_blueprint(balance_blp)
     api.register_blueprint(auth_blp)
+    api.register_blueprint(profile_blp)
 
     @app.get("/health")
     def health():

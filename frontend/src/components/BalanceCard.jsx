@@ -1,100 +1,80 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
+import { useMemo } from "react";
 import {
-  Card, CardContent, Typography, Grid, Divider, Chip, Stack, LinearProgress, List, ListItem, ListItemText
+  Card,
+  CardContent,
+  Chip,
+  Stack,
+  Typography,
 } from "@mui/material";
 import { brl } from "../utils";
 
-export default function BalanceCard({refreshKey, owner }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+const norm = (value) => String(value || "").trim().toLowerCase();
 
-  const load = async () => {
-    setLoading(true);
-    const { data } = await api.get("/balance");
-    setData(data);
-    setLoading(false);
+function buildAvailableBalance(items, owner, profile) {
+  const initialBalance = Number(profile?.initial_balance || 0);
+  let accountMovement = initialBalance;
+  let ownCreditInvoices = 0;
+
+  for (const item of items || []) {
+    if (item.is_projected) continue;
+
+    const value = Number(item.value || 0);
+    const isOwner = norm(item.person) === norm(owner);
+    const payment = norm(item.payment);
+
+    if (item.tx_type === "reembolso_credito") {
+      continue;
+    }
+
+    if (item.tx_type === "reembolso_debito") {
+      accountMovement += value;
+      continue;
+    }
+
+    if (isOwner) {
+      if (payment === "credito") {
+        ownCreditInvoices += value;
+      } else {
+        accountMovement += value;
+      }
+    } else if (payment === "debito") {
+      accountMovement += value;
+    } else if (payment !== "credito") {
+      accountMovement += value;
+    }
+  }
+
+  return {
+    accountMovement: Math.round(accountMovement * 100) / 100,
+    ownCreditInvoices: Math.round(ownCreditInvoices * 100) / 100,
+    available: Math.round((accountMovement + ownCreditInvoices) * 100) / 100,
   };
+}
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { if (refreshKey !== undefined) load(); }, [refreshKey]);
-
-  if (loading) return <LinearProgress sx={{ mt: 2 }} />;
-
-  const { saldo_total, totais, faturas, me_devem } = data || {};
-
-  const listEntries = (obj) =>
-    Object.entries(obj || {}).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+export default function BalanceCard({ owner, items, profile }) {
+  const data = useMemo(
+    () => buildAvailableBalance(items, owner, profile),
+    [items, owner, profile]
+  );
 
   return (
-    <Grid container spacing={2} sx={{ mt: 1 }}>
-      <Grid item xs={12} md={5}>
-        <Card>
-          <CardContent>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Typography variant="subtitle2">Saldo total</Typography>
-              <Chip size="small" label={`User: ${owner}`} />
-            </Stack>
-            <Typography variant="h4" color={saldo_total < 0 ? "error.main" : "success.main"} sx={{ fontWeight: 700 }}>
-              {brl(saldo_total)}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }} useFlexGap>
-              <Chip size="small" variant="outlined" label={`Faturas abertas: ${brl(totais?.faturas_em_aberto || 0)}`} />
-              <Chip size="small" variant="outlined" label={`Me devem: ${brl(totais?.me_devem_em_aberto || 0)}`} />
-            </Stack>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={8}>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle2">Faturas por pessoa</Typography>
-            <Divider sx={{ my: 1 }} />
-            <List dense disablePadding>
-              {listEntries(faturas).map(([p, v]) => (
-                <ListItem 
-                    key={p} 
-                    disableGutters
-                    secondaryAction={
-                    <Chip 
-                        size="small" 
-                        label={brl(v)} 
-                        color={v < 0 ? "error" : "success"} 
-                        variant="outlined" 
-                    />
-                    }
-                    sx={{ pr: 15 }}
-                >
-                <ListItemText primary={p} sx={{ overflow: "hidden", textOverflow: "ellipsis" }}/>
-                </ListItem>
-              ))}
-              {!Object.keys(faturas || {}).length && (
-                <Typography variant="body2" color="text.secondary">Sem valores em aberto</Typography>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle2">Me devem (débito) por pessoa</Typography>
-            <Divider sx={{ my: 1 }} />
-            <List dense disablePadding>
-              {listEntries(me_devem).map(([p, v]) => (
-                <ListItem key={p} disableGutters secondaryAction={<Chip size="small" label={brl(v)} color={v < 0 ? "error" : "success"} variant="outlined" />}>
-                  <ListItemText primary={p} />
-                </ListItem>
-              ))}
-              {!Object.keys(me_devem || {}).length && (
-                <Typography variant="body2" color="text.secondary">Sem valores em aberto</Typography>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+    <Card sx={{ height: "100%" }}>
+      <CardContent>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="subtitle2">Saldo disponivel</Typography>
+          <Chip size="small" label={`User: ${owner}`} />
+        </Stack>
+        <Typography
+          variant="h4"
+          color={data.available < 0 ? "error.main" : "success.main"}
+          sx={{ fontWeight: 700 }}
+        >
+          {brl(data.available)}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Saldo em conta menos sua parte nas faturas de credito.
+        </Typography>
+      </CardContent>
+    </Card>
   );
 }

@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import request
 from flask_jwt_extended import current_user, jwt_required
 from flask_smorest import Blueprint, abort
-from sqlalchemy import extract, func
+from sqlalchemy import case, extract, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -90,9 +90,15 @@ def _serialize_budget(budget):
     }
 
 
-def _serialize_summary(budget, actual):
+def _money(value):
+    return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _serialize_summary(budget, gross_actual=0, reimbursements=0):
     planned = Decimal(budget.amount)
-    actual = Decimal(actual or 0).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    gross_actual = _money(gross_actual)
+    reimbursements = _money(reimbursements)
+    actual = gross_actual - reimbursements
     remaining = planned - actual
     usage_percent = (
         (actual / planned * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -101,6 +107,8 @@ def _serialize_summary(budget, actual):
     return {
         **_serialize_budget(budget),
         "planned": float(planned),
+        "gross_actual": float(gross_actual),
+        "reimbursements": float(reimbursements),
         "actual": float(actual),
         "remaining": float(remaining),
         "usage_percent": float(usage_percent),
@@ -229,7 +237,12 @@ def budget_summary():
             session.query(
                 Transaction.category_id,
                 extract("month", Transaction.day).label("month"),
-                -func.sum(Transaction.value),
+                func.sum(
+                    case((Transaction.value < 0, -Transaction.value), else_=0)
+                ).label("gross_actual"),
+                func.sum(
+                    case((Transaction.value > 0, Transaction.value), else_=0)
+                ).label("reimbursements"),
             )
             .join(Person, Transaction.person_id == Person.id)
             .filter(Transaction.user_id == current_user.id)
@@ -237,7 +250,6 @@ def budget_summary():
             .filter(Transaction.is_projected.is_(False))
             .filter(Transaction.is_deleted.is_(False))
             .filter(Transaction.tx_type == TxType.normal)
-            .filter(Transaction.value < 0)
             .filter(Person.user_id == current_user.id)
             .filter(func.lower(func.trim(Person.name)) == _norm(current_user.username))
             .filter(extract("year", Transaction.day) == year)
@@ -245,8 +257,8 @@ def budget_summary():
         if month is not None:
             actual_query = actual_query.filter(extract("month", Transaction.day) == month)
         actual_by_period = {
-            (category_id, int(transaction_month)): actual
-            for category_id, transaction_month, actual in actual_query.group_by(
+            (category_id, int(transaction_month)): (gross_actual, reimbursements)
+            for category_id, transaction_month, gross_actual, reimbursements in actual_query.group_by(
                 Transaction.category_id,
                 extract("month", Transaction.day),
             ).all()
@@ -255,7 +267,7 @@ def budget_summary():
             "items": [
                 _serialize_summary(
                     budget,
-                    actual_by_period.get((budget.category_id, budget.month)),
+                    *actual_by_period.get((budget.category_id, budget.month), (0, 0)),
                 )
                 for budget in budgets
             ]

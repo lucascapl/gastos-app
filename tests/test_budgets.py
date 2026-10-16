@@ -178,9 +178,11 @@ class MonthlyBudgetApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         summary = {item["id"]: item for item in response.get_json()["items"]}
 
-        self.assertEqual(summary[budget["id"]]["actual"], 335.0)
-        self.assertEqual(summary[budget["id"]]["remaining"], 165.0)
-        self.assertEqual(summary[budget["id"]]["usage_percent"], 67.0)
+        self.assertEqual(summary[budget["id"]]["gross_actual"], 335.0)
+        self.assertEqual(summary[budget["id"]]["reimbursements"], 100.0)
+        self.assertEqual(summary[budget["id"]]["actual"], 235.0)
+        self.assertEqual(summary[budget["id"]]["remaining"], 265.0)
+        self.assertEqual(summary[budget["id"]]["usage_percent"], 47.0)
         self.assertFalse(summary[budget["id"]]["over_budget"])
 
         self.assertEqual(summary[over_budget["id"]]["actual"], 350.0)
@@ -190,10 +192,79 @@ class MonthlyBudgetApiTestCase(unittest.TestCase):
         yearly = self.client.get("/budgets/summary?year=2026", headers=self._headers(self.alice_token))
         self.assertEqual(yearly.status_code, 200)
         yearly_summary = {item["id"]: item for item in yearly.get_json()["items"]}
-        self.assertEqual(yearly_summary[budget["id"]]["actual"], 335.0)
+        self.assertEqual(yearly_summary[budget["id"]]["actual"], 235.0)
         self.assertEqual(yearly_summary[september_budget["id"]]["actual"], 10.0)
         self.assertEqual(yearly_summary[decimal_budget["id"]]["actual"], 0.3)
         self.assertEqual(yearly_summary[decimal_budget["id"]]["usage_percent"], 30.0)
+
+    def test_summary_nets_owner_normal_reimbursements_by_category_and_month(self):
+        october_budget = self._create_budget(self.alice_token, self.alice_food.id, amount="600.00").get_json()
+        personal_cost_budget = self._create_budget(self.alice_token, self.alice_home.id, amount="100.00").get_json()
+        november_budget = self._create_budget(
+            self.alice_token, self.alice_food.id, amount="600.00", month=11,
+        ).get_json()
+
+        session = SessionLocal()
+        try:
+            session.add_all([
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="-903.45", event="iFood", day=date(2026, 10, 5), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="60.00", event="Pix ressarcimento", day=date(2026, 10, 8), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.shared_person.id, value="-80.00", event="Compra de terceiro", day=date(2026, 10, 9), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="-50.00", event="Previsto", day=date(2026, 10, 10), is_projected=True, tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="-40.00", event="Excluido", day=date(2026, 10, 11), is_deleted=True, tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="25.00", event="Reembolso com tipo especial", day=date(2026, 10, 12), tx_type=TxType.reembolso_debito),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="30.00", event="Pix de outro mes", day=date(2026, 11, 2), tx_type=TxType.normal),
+                Transaction(user_id=2, category_id=self.alice_food.id, person_id=self.alice_person.id, value="90.00", event="Outro usuario", day=date(2026, 10, 13), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_home.id, person_id=self.alice_person.id, value="-150.00", event="Compra propria", day=date(2026, 10, 14), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_home.id, person_id=self.alice_person.id, value="60.00", event="Pix ressarcimento", day=date(2026, 10, 15), tx_type=TxType.normal),
+            ])
+            session.commit()
+        finally:
+            session.close()
+
+        response = self.client.get("/budgets/summary?year=2026&month=10", headers=self._headers(self.alice_token))
+        self.assertEqual(response.status_code, 200)
+        summary = {item["id"]: item for item in response.get_json()["items"]}
+
+        self.assertEqual(summary[october_budget["id"]]["gross_actual"], 903.45)
+        self.assertEqual(summary[october_budget["id"]]["reimbursements"], 60.0)
+        self.assertEqual(summary[october_budget["id"]]["actual"], 843.45)
+        self.assertEqual(summary[october_budget["id"]]["remaining"], -243.45)
+        self.assertTrue(summary[october_budget["id"]]["over_budget"])
+
+        self.assertEqual(summary[personal_cost_budget["id"]]["gross_actual"], 150.0)
+        self.assertEqual(summary[personal_cost_budget["id"]]["reimbursements"], 60.0)
+        self.assertEqual(summary[personal_cost_budget["id"]]["actual"], 90.0)
+
+        november = self.client.get("/budgets/summary?year=2026&month=11", headers=self._headers(self.alice_token))
+        november_summary = {item["id"]: item for item in november.get_json()["items"]}
+        self.assertEqual(november_summary[november_budget["id"]]["gross_actual"], 0.0)
+        self.assertEqual(november_summary[november_budget["id"]]["reimbursements"], 30.0)
+        self.assertEqual(november_summary[november_budget["id"]]["actual"], -30.0)
+
+    def test_summary_preserves_negative_net_actual(self):
+        budget = self._create_budget(self.alice_token, self.alice_food.id, amount="500.00").get_json()
+
+        session = SessionLocal()
+        try:
+            session.add_all([
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="-50.00", event="Despesa", day=date(2026, 10, 5), tx_type=TxType.normal),
+                Transaction(user_id=1, category_id=self.alice_food.id, person_id=self.alice_person.id, value="200.00", event="Pix ressarcimento", day=date(2026, 10, 8), tx_type=TxType.normal),
+            ])
+            session.commit()
+        finally:
+            session.close()
+
+        response = self.client.get("/budgets/summary?year=2026&month=10", headers=self._headers(self.alice_token))
+        self.assertEqual(response.status_code, 200)
+        summary = response.get_json()["items"][0]
+
+        self.assertEqual(summary["gross_actual"], 50.0)
+        self.assertEqual(summary["reimbursements"], 200.0)
+        self.assertEqual(summary["actual"], -150.0)
+        self.assertEqual(summary["remaining"], 650.0)
+        self.assertEqual(summary["usage_percent"], -30.0)
+        self.assertFalse(summary["over_budget"])
 
 
 if __name__ == "__main__":

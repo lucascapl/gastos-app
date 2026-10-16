@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Box, Button, Card, CardContent, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, IconButton, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { brl, unique } from "../utils";
 import TransactionsTable from "./TransactionsTable";
+import TransactionForm from "./TransactionForm";
+import MonthlyBudgets from "./MonthlyBudgets";
 
 const colors = ["#1976d2", "#2e7d32", "#ed6c02", "#9c27b0", "#d32f2f", "#00897b", "#5d4037", "#455a64"];
 const monthLabels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -266,8 +268,10 @@ function ForecastVsRealized({ data, selectedMonth, onSelectMonth }) {
   );
 }
 
-export default function AnnualProjection({ items, owner, optionsVersion, onSaved }) {
+export default function AnnualProjection({ items, owner, optionsVersion, onSaved, onCreate }) {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [tab, setTab] = useState("budgets");
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set(["budgets"]));
   const [filters, setFilters] = useState({
     month: "",
     category: "",
@@ -427,7 +431,56 @@ export default function AnnualProjection({ items, owner, optionsVersion, onSaved
         </CardContent>
       </Card>
 
-      <Card>
+      <Tabs
+        value={tab}
+        onChange={(_, value) => {
+          setTab(value);
+          setVisitedTabs((current) => new Set([...current, value]));
+        }}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        aria-label="Seções da projeção anual"
+      >
+        <Tab value="budgets" label="Orçamentos" />
+        <Tab value="forecast" label="Contas previstas" />
+        <Tab value="analysis" label="Análises" />
+      </Tabs>
+
+      {visitedTabs.has("budgets") && (
+        <Box role="tabpanel" hidden={tab !== "budgets"}>
+          <MonthlyBudgets year={selectedYear} dataVersion={optionsVersion} />
+        </Box>
+      )}
+
+      {visitedTabs.has("forecast") && (
+        <Box role="tabpanel" hidden={tab !== "forecast"}>
+          <Stack spacing={2}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" fontWeight={700}>Contas previstas</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Compromissos futuros não são orçamentos mensais por categoria. A conversão para realizado segue o fluxo existente.
+                </Typography>
+              </CardContent>
+            </Card>
+            <TransactionForm
+              onSubmit={onCreate}
+              owner={owner}
+              optionsVersion={optionsVersion}
+              defaultProjected
+            />
+            <TransactionsTable
+              items={rows.filter((item) => item.is_projected)}
+              optionsVersion={optionsVersion}
+              onSaved={onSaved}
+            />
+          </Stack>
+        </Box>
+      )}
+
+      {visitedTabs.has("analysis") && (
+        <Box role="tabpanel" hidden={tab !== "analysis"}>
+          <Card>
         <CardContent>
           <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 0.5 }}>
             <Typography variant="h6" fontWeight={700}>Categorias realizadas</Typography>
@@ -625,6 +678,8 @@ export default function AnnualProjection({ items, owner, optionsVersion, onSaved
         optionsVersion={optionsVersion}
         onSaved={onSaved}
       />
+        </Box>
+      )}
     </Stack>
   );
 }

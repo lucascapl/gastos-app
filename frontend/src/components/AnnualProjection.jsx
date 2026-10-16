@@ -42,7 +42,7 @@ function CategoryPie({ data, selectedCategory, onSelectCategory }) {
   if (!total) {
     return (
       <Box sx={{ height: 180, display: "grid", placeItems: "center" }}>
-        <Typography variant="body2" color="text.secondary">Sem dados para categorias.</Typography>
+        <Typography variant="body2" color="text.secondary">Sem transacoes realizadas para os filtros selecionados.</Typography>
       </Box>
     );
   }
@@ -246,11 +246,11 @@ function ForecastVsRealized({ data, selectedMonth, onSelectMonth }) {
               }}
             >
               <Typography variant="subtitle2" fontWeight={700}>{item.label}</Typography>
-              <Typography variant="caption" color="text.secondary">Previsto acum.</Typography>
+              <Typography variant="caption" color="text.secondary">Previsto acum. no periodo</Typography>
               <Typography variant="body2" fontWeight={700} color={item.projectedCumulative < 0 ? "error.main" : "success.main"}>
                 {brl(item.projectedCumulative)}
               </Typography>
-              <Typography variant="caption" color="text.secondary">Realizado acum.</Typography>
+              <Typography variant="caption" color="text.secondary">Realizado acum. no periodo</Typography>
               <Typography variant="body2" fontWeight={700} color={item.realizedCumulative < 0 ? "error.main" : "success.main"}>
                 {brl(item.realizedCumulative)}
               </Typography>
@@ -266,7 +266,7 @@ function ForecastVsRealized({ data, selectedMonth, onSelectMonth }) {
   );
 }
 
-export default function AnnualProjection({ items, owner, optionsVersion, profile, onSaved }) {
+export default function AnnualProjection({ items, owner, optionsVersion, onSaved }) {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [filters, setFilters] = useState({
     month: "",
@@ -327,10 +327,8 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
     return [...map.values()].sort((a, b) => b.value - a.value);
   }, [realizedRows]);
 
-  const initialBalance = Number(profile?.initial_balance || 0);
-
   const monthlyData = useMemo(() => {
-    let cumulative = initialBalance;
+    let cumulative = 0;
     return months.map((month) => {
       const monthRows = realizedRows.filter((item) => String(item.day || "").startsWith(month.key));
       const income = monthRows
@@ -350,11 +348,11 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
         cumulative,
       };
     });
-  }, [initialBalance, months, realizedRows]);
+  }, [months, realizedRows]);
 
   const forecastData = useMemo(() => {
-    let projectedCumulative = initialBalance;
-    let realizedCumulative = initialBalance;
+    let projectedCumulative = 0;
+    let realizedCumulative = 0;
     return months.map((month) => {
       const monthRows = filteredRows.filter((item) => String(item.day || "").startsWith(month.key));
       const projected = monthRows
@@ -375,7 +373,7 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
         diff: realizedCumulative - projectedCumulative,
       };
     });
-  }, [initialBalance, filteredRows, months]);
+  }, [filteredRows, months]);
 
   const filteredTotal = filteredRows.reduce((acc, item) => acc + Number(item.value || 0), 0);
   const projectedTotal = projectedRows.reduce((acc, item) => acc + Number(item.value || 0), 0);
@@ -425,19 +423,20 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
                 {brl(realizedTotal)}
               </Typography>
             </Box>
-            <Box>
-              <Typography variant="subtitle2">Saldo realizado</Typography>
-              <Typography variant="h5" fontWeight={700} color={initialBalance + realizedTotal < 0 ? "error.main" : "success.main"}>
-                {brl(initialBalance + realizedTotal)}
-              </Typography>
-            </Box>
           </Stack>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 0.5 }}>Categorias realizadas</Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 0.5 }}>
+            <Typography variant="h6" fontWeight={700}>Categorias realizadas</Typography>
+            {filters.category && (
+              <Button size="small" variant="outlined" onClick={() => patchFilter("category", "")}>
+                Limpar categoria
+              </Button>
+            )}
+          </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             A seleção da categoria filtra todos os indicadores desta tela.
           </Typography>
@@ -460,7 +459,7 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
             <Box>
               <Typography variant="h6" fontWeight={700}>Previsto vs realizado</Typography>
               <Typography variant="body2" color="text.secondary">
-                Comparativo acumulado dos registros previstos e realizados conforme os filtros selecionados.
+                Compara registros atualmente previstos e realizados conforme os filtros. Ao realizar uma previsao, o valor original previsto nao e preservado.
               </Typography>
             </Box>
             {filters.month && (
@@ -469,11 +468,19 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
               </Button>
             )}
           </Stack>
-          <ForecastVsRealized
-            data={forecastData}
-            selectedMonth={filters.month}
-            onSelectMonth={(month) => patchFilter("month", month)}
-          />
+          {filteredRows.length ? (
+            <ForecastVsRealized
+              data={forecastData}
+              selectedMonth={filters.month}
+              onSelectMonth={(month) => patchFilter("month", month)}
+            />
+          ) : (
+            <Box sx={{ height: 180, display: "grid", placeItems: "center" }}>
+              <Typography variant="body2" color="text.secondary">
+                Sem transacoes para os filtros selecionados.
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -488,7 +495,7 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
             <Box>
               <Typography variant="h6" fontWeight={700}>Entradas e saidas realizadas por mes</Typography>
               <Typography variant="body2" color="text.secondary">
-                Clique em um mes para filtrar todos os indicadores da tela.
+                Clique em um mes para filtrar todos os indicadores da tela. O valor abaixo do mes e o resultado acumulado no periodo.
               </Typography>
             </Box>
             {filters.month && (
@@ -497,11 +504,19 @@ export default function AnnualProjection({ items, owner, optionsVersion, profile
               </Button>
             )}
           </Stack>
-          <MonthlyBars
-            data={monthlyData}
-            selectedMonth={filters.month}
-            onSelectMonth={(month) => patchFilter("month", month)}
-          />
+          {realizedRows.length ? (
+            <MonthlyBars
+              data={monthlyData}
+              selectedMonth={filters.month}
+              onSelectMonth={(month) => patchFilter("month", month)}
+            />
+          ) : (
+            <Box sx={{ height: 180, display: "grid", placeItems: "center" }}>
+              <Typography variant="body2" color="text.secondary">
+                Sem transacoes realizadas para os filtros selecionados.
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 

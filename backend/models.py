@@ -1,5 +1,6 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Date, Numeric, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Date, Numeric, ForeignKey, Enum, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
+from datetime import datetime
 import enum
 
 from .db import Base
@@ -65,6 +66,32 @@ class Person(Base):
     name = Column(String, nullable=False)
 
     user = relationship("User")
+
+
+class MonthlyBudget(Base):
+    __tablename__ = "monthly_budgets"
+    __table_args__ = (
+        CheckConstraint("year >= 1 AND year <= 9999", name="ck_monthly_budgets_year"),
+        CheckConstraint("month >= 1 AND month <= 12", name="ck_monthly_budgets_month"),
+        CheckConstraint("amount > 0", name="ck_monthly_budgets_amount"),
+        UniqueConstraint(
+            "user_id", "category_id", "year", "month",
+            name="uq_monthly_budgets_user_category_period",
+        ),
+        Index("ix_monthly_budgets_user_year_month", "user_id", "year", "month"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+    category = relationship("Category")
 
 class Transaction(Base):
     __tablename__ = "transactions"

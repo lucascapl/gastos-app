@@ -351,20 +351,15 @@ export default function App() {
             <Stack spacing={1} sx={{ display: { xs: "none", md: "block" } }}>
               <Typography variant="h3" fontWeight={700}>Projecao anual</Typography>
               <Typography variant="body2" color="text.secondary">
-                Transacoes de <b>{owner}</b> em 2026, incluindo lancamentos futuros.
+                Planejamento, contas previstas e análises de <b>{owner}</b>.
               </Typography>
             </Stack>
 
-            <TransactionForm
-              onSubmit={create}
-              owner={owner}
-              optionsVersion={optionsVersion}
-              defaultProjected
-            />
             <AnnualProjection
               items={items}
               owner={owner}
               optionsVersion={optionsVersion}
+              onCreate={create}
               onSaved={() => {
                 (async () => {
                   await load({ showLoading: false });

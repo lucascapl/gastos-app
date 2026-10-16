@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, current_user
 from datetime import date, datetime
 from calendar import monthrange
 from ..db import SessionLocal
-from ..models import Transaction, Category, PaymentMethod, Person, Bank, TxType
+from ..models import Transaction, Category, PaymentMethod, Person, Bank, MonthlyBudget, TxType
 from typing import Optional
 
 REFERENCE_MODELS = {
@@ -565,6 +565,15 @@ def delete_reference_item(kind, item_id):
             )
         if usage_count:
             abort(409, message="Cadastro em uso por transacoes.")
+
+        if model is Category:
+            budget_count = (
+                s.query(MonthlyBudget)
+                .filter(MonthlyBudget.category_id == item.id)
+                .count()
+            )
+            if budget_count:
+                abort(409, message="Cadastro em uso por orcamentos.")
 
         if model is not Bank:
             (

@@ -29,9 +29,9 @@ const emptyForm = {
   repeat_count: "",
   repeat_until: "",
   split_person_1: "",
-  split_percent_1: "70",
+  split_percent_1: "50",
   split_person_2: "",
-  split_percent_2: "30",
+  split_percent_2: "50",
 };
 
 function getInitialForm(defaultProjected = false) {

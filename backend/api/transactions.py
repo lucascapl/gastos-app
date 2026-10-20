@@ -307,6 +307,9 @@ def create_transaction():
         if not _norm(data.get("day")):
             abort(400, message="Campo 'day' é obrigatório (YYYY-MM-DD).")
 
+        # Cada ocorrência representa uma parcela completa. A divisão é
+        # aplicada dentro de cada parcela, portanto uma compra de -110
+        # dividida igualmente gera -55 para cada pessoa em todas as parcelas.
         for occurrence in occurrences:
             for split in splits:
                 per = _get_or_create_user_scoped(s, Person, split["person"])

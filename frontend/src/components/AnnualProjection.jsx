@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Box, Button, Card, CardContent, IconButton, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -272,6 +272,7 @@ export default function AnnualProjection({ items, owner, optionsVersion, onSaved
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [tab, setTab] = useState("budgets");
   const [visitedTabs, setVisitedTabs] = useState(() => new Set(["budgets"]));
+  const [selectedForecastPerson, setSelectedForecastPerson] = useState("__mine__");
   const [filters, setFilters] = useState({
     month: "",
     category: "",
@@ -291,6 +292,31 @@ export default function AnnualProjection({ items, owner, optionsVersion, onSaved
       .filter((item) => item.day >= yearStart && item.day <= yearEnd)
       .sort((a, b) => b.id - a.id);
   }, [items, owner, yearEnd, yearStart]);
+
+  const forecastPeople = useMemo(() => unique(
+    items
+      .map((item) => item.person)
+      .filter(Boolean)
+  ), [items]);
+
+  useEffect(() => {
+    if (selectedForecastPerson !== "__mine__" && selectedForecastPerson !== "__all__"
+      && !forecastPeople.includes(selectedForecastPerson)) {
+      setSelectedForecastPerson("__mine__");
+    }
+  }, [forecastPeople, selectedForecastPerson]);
+
+  const forecastRows = useMemo(() => {
+    return items
+      .filter((item) => item.day >= yearStart && item.day <= yearEnd)
+      .filter((item) => item.is_projected)
+      .filter((item) => {
+        if (selectedForecastPerson === "__all__") return true;
+        if (selectedForecastPerson === "__mine__") return item.person === owner;
+        return item.person === selectedForecastPerson;
+      })
+      .sort((a, b) => b.id - a.id);
+  }, [items, owner, selectedForecastPerson, yearEnd, yearStart]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((item) => {
@@ -469,8 +495,26 @@ export default function AnnualProjection({ items, owner, optionsVersion, onSaved
               optionsVersion={optionsVersion}
               defaultProjected
             />
+            <Card>
+              <CardContent>
+                <TextField
+                  select
+                  size="small"
+                  label="Pessoa"
+                  value={selectedForecastPerson}
+                  onChange={(event) => setSelectedForecastPerson(event.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="__mine__">Minhas transações</MenuItem>
+                  <MenuItem value="__all__">Todas as pessoas</MenuItem>
+                  {forecastPeople
+                    .filter((person) => person !== owner)
+                    .map((person) => <MenuItem key={person} value={person}>{person}</MenuItem>)}
+                </TextField>
+              </CardContent>
+            </Card>
             <TransactionsTable
-              items={rows.filter((item) => item.is_projected)}
+              items={forecastRows}
               optionsVersion={optionsVersion}
               onSaved={onSaved}
             />
